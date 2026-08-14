@@ -17,4 +17,10 @@ CrossFire is a legacy **Tcl/Tk desktop GUI application** (for the Spellfire card
 
 ### Offline vs. online functionality
 - All local features work fully offline: card database browsing (`DataBase/*.tcl`), the **DeckIt!** deck editor (saves `.cfd` files to `Decks/`), Card Warehouse (inventory), ComboMan, Swap Shop, Fan Set editor, Solitaire, printing/reports.
-- **Online real-time chat/play** connects to an external server (`cfserver.spellfire.net:10000`) that is **not part of this repo and cannot be run locally** — treat it as optional/unreachable when testing.
+- **Online real-time chat/play** connects to a **SPINS** server (default `cfserver.spellfire.net:10000`, which no longer resolves). The server is a separate project — the `dadof5boys/spellfire-spin-server` repo, NOT part of this repo. To test online end-to-end you must run that server locally and point the client at it.
+
+### Connecting CrossFire to a local SPINS server
+- The client connects with a plain async TCP socket: `Chat::ServerLogin` in `Scripts/Chat.tcl` calls `socket -async $host $port`. The default host/port come from `Scripts/Config.tcl` (`Chat,server,host` = `cfserver.spellfire.net`, `Chat,server,port` = `10000`).
+- Easiest way to point at a local server: launch the client in developer mode with `DISPLAY=:1 wish CrossFire.tcl -dev`. In `-dev` mode the login dialog (CrossFire → Online Chat, Ctrl+H) shows editable **Host** and **Port** fields — set them to `localhost` / `<server port>`.
+- Alternatively, add/select a server entry via Utilities → Configure → Chat, or edit the persisted config file `~/.CrossFire` (`Chat,server,host`/`Chat,server,port`/`Chat,server,list`).
+- The two repos must both be present to test this (multi-repo Cursor environment): a cloud run's GitHub token is scoped to the repos in its environment, so the client and server repos need to be in the same environment for the agent to clone both.
