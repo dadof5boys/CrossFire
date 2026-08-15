@@ -1,4 +1,11 @@
-import type { ChatMessage, Occupant, PlayView, TableSummary, Whisper } from '@spellfire/shared';
+import type {
+  ChatMessage,
+  Occupant,
+  PlayPhase,
+  PlayView,
+  TableSummary,
+  Whisper,
+} from '@spellfire/shared';
 import { DEFAULT_CHAT_CHANNEL } from '@spellfire/shared';
 import { type ReactNode, createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import { type Socket, io } from 'socket.io-client';
@@ -19,12 +26,10 @@ export interface RealtimeApi {
   loadDeck: (tableId: string, deckId: string) => void;
   start: (tableId: string) => void;
   draw: (tableId: string) => void;
-  move: (
-    tableId: string,
-    instanceId: string,
-    toZone: 'hand' | 'pool' | 'realms' | 'discard',
-  ) => void;
+  move: (tableId: string, instanceId: string, toZone: 'pool' | 'realms' | 'discard') => void;
   passTurn: (tableId: string) => void;
+  setPhase: (tableId: string, phase: PlayPhase) => void;
+  attack: (tableId: string, attackerInstanceId: string, targetInstanceId: string) => void;
   syncPlay: (tableId: string) => void;
 }
 
@@ -43,6 +48,8 @@ const noopApi: RealtimeApi = {
   draw: () => {},
   move: () => {},
   passTurn: () => {},
+  setPhase: () => {},
+  attack: () => {},
   syncPlay: () => {},
 };
 
@@ -146,6 +153,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       draw: (tableId) => emit('play:draw', { tableId }),
       move: (tableId, instanceId, toZone) => emit('play:move', { tableId, instanceId, toZone }),
       passTurn: (tableId) => emit('play:pass-turn', { tableId }),
+      setPhase: (tableId, phase) => emit('play:set-phase', { tableId, phase }),
+      attack: (tableId, attackerInstanceId, targetInstanceId) =>
+        emit('play:attack', { tableId, attackerInstanceId, targetInstanceId }),
       syncPlay: (tableId) => emit('play:sync', { tableId }),
     };
   }, []);

@@ -8,6 +8,7 @@ const view: PlayView = {
   status: 'lobby',
   activeSeat: 0,
   turnNumber: 1,
+  phase: 0,
   youSeat: 0,
   seats: [
     {
@@ -18,6 +19,7 @@ const view: PlayView = {
       pool: [],
       realms: [],
       discard: [],
+      razedInstanceIds: [],
     },
     {
       occupant: null,
@@ -27,9 +29,11 @@ const view: PlayView = {
       pool: [],
       realms: [],
       discard: [],
+      razedInstanceIds: [],
     },
   ],
   spectators: [],
+  lastCombat: null,
 };
 
 describe('playStore', () => {

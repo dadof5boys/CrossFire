@@ -14,8 +14,8 @@ const app = buildApp({
     return { userId: parts[1] ?? '', email: parts[2] ?? `${parts[1]}@test.local` };
   },
   loadDeck: async (_userId, deckId) => {
-    if (deckId === 'deck-a') return { name: 'A Deck', cards: [{ cardId: '1st/1', qty: 8 }] };
-    if (deckId === 'deck-b') return { name: 'B Deck', cards: [{ cardId: 'FR/2', qty: 8 }] };
+    if (deckId === 'deck-a') return { name: 'A Deck', cards: [{ cardId: '1st/43', qty: 8 }] };
+    if (deckId === 'deck-b') return { name: 'B Deck', cards: [{ cardId: '1st/1', qty: 8 }] };
     return null;
   },
 });
@@ -54,22 +54,33 @@ function emitAck<T = unknown>(
   });
 }
 
+type PlayState = {
+  status: string;
+  phase: number;
+  lastCombat: { razed: boolean; attackerBonus: number; defenderBonus: number } | null;
+  seats: [
+    {
+      hand: unknown;
+      pool: { instanceId: string; cardId: string }[];
+      realms: { instanceId: string; cardId: string }[];
+      razedInstanceIds: string[];
+    },
+    {
+      hand: unknown;
+      pool: { instanceId: string; cardId: string }[];
+      realms: { instanceId: string; cardId: string }[];
+      razedInstanceIds: string[];
+    },
+  ];
+};
+
 function waitForState(
   socket: ClientSocket,
-  pred: (view: {
-    status: string;
-    seats: [{ hand: unknown; pool: { cardId: string }[] }, { hand: unknown }];
-  }) => boolean,
-): Promise<{
-  status: string;
-  seats: [{ hand: unknown; pool: { cardId: string }[] }, { hand: unknown }];
-}> {
+  pred: (view: PlayState) => boolean,
+): Promise<PlayState> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('play:state timed out')), 4000);
-    const onState = (view: {
-      status: string;
-      seats: [{ hand: unknown; pool: { cardId: string }[] }, { hand: unknown }];
-    }) => {
+    const onState = (view: PlayState) => {
       if (!pred(view)) return;
       clearTimeout(timer);
       socket.off('play:state', onState);
@@ -178,7 +189,66 @@ describe('realtime socket', () => {
     const moved = waitForState(b, (v) => v.seats[0].pool.length > 0);
     await emitAck(a, 'play:move', { tableId, instanceId: hand[0]?.instanceId, toZone: 'pool' });
     const after = await moved;
-    expect(after.seats[0].pool.some((c) => c.cardId === '1st/1')).toBe(true);
+    expect(after.seats[0].pool.some((c) => c.cardId === '1st/43')).toBe(true);
+
+    a.close();
+    b.close();
+  });
+
+  it('enforces turn order and razes a realm on a winning attack', async () => {
+    const a = await connect('user-r1', 'r1@example.com');
+    const b = await connect('user-r2', 'r2@example.com');
+    const table = await emitAck<{ id: string }>(a, 'table:create', { name: 'Combat Test' });
+    const tableId = table?.id;
+    expect(tableId).toBeTruthy();
+
+    await emitAck(b, 'table:join', { tableId });
+    await emitAck(b, 'play:sit', { tableId });
+    await emitAck(a, 'play:load-deck', { tableId, deckId: 'deck-a' });
+    await emitAck(b, 'play:load-deck', { tableId, deckId: 'deck-b' });
+
+    const started = waitForState(
+      a,
+      (v) => v.status === 'playing' && Array.isArray(v.seats[0].hand),
+    );
+    await emitAck(a, 'play:start', { tableId });
+    const viewA = await started;
+    const champ = (viewA.seats[0].hand as { instanceId: string }[])[0];
+    expect(champ).toBeTruthy();
+
+    await expect(
+      new Promise<string>((resolve, reject) => {
+        b.emit('play:draw', { tableId }, (err: string | null) => {
+          if (err) resolve(err);
+          else reject(new Error('expected off-turn draw to fail'));
+        });
+      }),
+    ).resolves.toBe('Not your turn');
+
+    await emitAck(a, 'play:move', { tableId, instanceId: champ?.instanceId, toZone: 'pool' });
+    await emitAck(a, 'play:pass-turn', { tableId });
+
+    const bobReady = waitForState(
+      b,
+      (v) => v.status === 'playing' && Array.isArray(v.seats[1].hand),
+    );
+    await emitAck(b, 'play:sync', { tableId });
+    const viewB = await bobReady;
+    const realm = (viewB.seats[1].hand as { instanceId: string }[])[0];
+    expect(realm).toBeTruthy();
+    await emitAck(b, 'play:move', { tableId, instanceId: realm?.instanceId, toZone: 'realms' });
+    await emitAck(b, 'play:pass-turn', { tableId });
+
+    const razed = waitForState(a, (v) => v.lastCombat?.razed === true);
+    await emitAck(a, 'play:attack', {
+      tableId,
+      attackerInstanceId: champ?.instanceId,
+      targetInstanceId: realm?.instanceId,
+    });
+    const after = await razed;
+    expect(after.phase).toBe(4);
+    expect(after.lastCombat).toMatchObject({ attackerBonus: 3, defenderBonus: 0, razed: true });
+    expect(after.seats[1].razedInstanceIds).toEqual([realm?.instanceId]);
 
     a.close();
     b.close();
