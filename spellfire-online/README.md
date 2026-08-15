@@ -1,90 +1,70 @@
 # Spellfire Online
 
 A web reimplementation of the classic **CrossFire** Spellfire card‑game client
-(originally a Tcl/Tk desktop app). This project is being built incrementally and
-lives on the `spellfire-online` branch as a subdirectory of the CrossFire repo,
-so the legacy Tcl source (its input) sits in the parent directory.
+(originally a Tcl/Tk desktop app), built incrementally. This is a **pnpm
+workspace** living on the `spellfire-online` branch as a subdirectory of the
+CrossFire repo, so the legacy Tcl source (used as pipeline input) sits in the
+parent directory.
 
-## Step 1 — Data extraction pipeline (this repo, so far)
+## Workspace layout
 
-The legacy client stores its card database and user content as **Tcl data
-files**. Step 1 converts that data into typed, validated JSON that the future
-web client and server can consume, without depending on a Tcl runtime.
-
-- **Pure‑TypeScript Tcl parser** (`src/tcl.ts`) — reads the *data subset* of Tcl
-  (`set` assignments + brace‑nested lists) with correct quoting rules. It does
-  **not** evaluate Tcl, so nothing in the source data is executed.
-- **Zod schema** (`src/schema.ts`) — the single source of truth for the data
-  model. Every converted record is validated against it, and the TypeScript
-  types are inferred from it for reuse by the client/server later.
-- **Converters** — reference tables (`src/reference.ts`), cards (`src/cards.ts`),
-  decks & combos (`src/decks.ts`).
-
-### Output (`data/`)
-
-| File | Contents |
+| Package | Purpose |
 | --- | --- |
-| `cards.json` | Combined dataset: `sets`, `cardTypes`, `worlds`, and all `cards` (+ counts). |
-| `decks.json` | Sample decks converted from `.cfd` files. |
-| `combos.json` | Combos converted from `.cfc` files. |
+| `packages/shared` (`@spellfire/shared`) | Zod schemas + inferred TypeScript types — the single source of truth for the data model, shared by every package. |
+| `packages/data-pipeline` (`@spellfire/data-pipeline`) | **Step 1.** Pure‑TypeScript Tcl → JSON converter (no Tcl runtime) producing `cards.json`, `decks.json`, `combos.json`. |
+| `apps/web` (`@spellfire/web`) | **Step 2.** Vite + React card browser and local‑first deck editor. |
 
-Current extraction: **6,024 cards** across **26 sets** (4,189 with card images),
-plus 25 card types, 10 worlds, 46 decks, and 1 combo.
-
-### Card shape
-
-```jsonc
-{
-  "id": "1st/1",
-  "setId": "1st",
-  "number": 1,
-  "title": "Waterdeep",
-  "text": "Any champion can use wizard spells when defending Waterdeep.",
-  "typeId": 13, "type": "Realm",
-  "worldId": 1, "world": "Forgotten Realms",
-  "isAvatar": false,
-  "bonus": null, "bonusRaw": "",      // bonusRaw preserves variable values like "+?"
-  "rarity": "M",
-  "blueLine": "Coast.",
-  "attrCodes": ["5", "31"],           // raw legacy attribute codes (index 10)
-  "usesCodes": ["d19", "o19"],        // raw legacy "uses" codes (index 11)
-  "uses": ["Wizard Spell, Def", "Wizard Spell, Off"], // decoded
-  "weight": 1,
-  "image": "Graphics/Cards/1st/001.jpg" // repo‑relative path in the CrossFire source, or null
-}
-```
-
-## Usage
+## Quick start
 
 Requires Node.js >= 20 and pnpm.
 
 ```bash
 pnpm install
 
-# Regenerate data/ from the CrossFire checkout.
-# Input path resolution: argv[1] > $CROSSFIRE_DIR > ".." (the CrossFire repo root)
-pnpm build:data              # uses the parent CrossFire checkout by default
-pnpm build:data /path/to/CrossFire   # or point at another checkout
+# Step 1 — regenerate the dataset from the parent CrossFire checkout.
+# (Input path: argv > $CROSSFIRE_DIR > nearest ancestor containing Scripts/CommonV.tcl)
+pnpm build:data
 
-pnpm test        # unit + integration tests (integration auto‑skips if source absent)
+# Step 2 — run the web app (predev copies the dataset into apps/web/public/data)
+pnpm web            # http://localhost:5173
+
+# Repo-wide checks
 pnpm typecheck
+pnpm test
 pnpm lint
 ```
 
-> The pipeline reads the CrossFire source as **input**; it is not vendored here.
-> The generated `data/*.json` is committed so the dataset is usable standalone.
-> Card **images** are referenced by repo‑relative path and are not copied yet
-> (image hosting is a later step).
+## Step 1 — Data pipeline (`packages/data-pipeline`)
+
+A dependency‑free parser reads the *data subset* of Tcl (`set` + brace‑nested
+lists) — it never evaluates Tcl. Converts the legacy card database, decks, and
+combos into typed, Zod‑validated JSON.
+
+- **6,024 cards** across **26 sets** (4,189 with images), 25 card types, 10
+  worlds, 46 decks, 1 combo.
+- Per‑set counts match the legacy `numLimits` exactly; variable bonuses (`?`,
+  `+?`) preserved in `bonusRaw`.
+
+## Step 2 — Web app (`apps/web`)
+
+- **Card browser**: responsive grid with images, full‑text search (MiniSearch),
+  and faceted filters (set / type / world / rarity), with a card detail dialog.
+- **Local‑first deck editor**: add/remove cards (click or drag‑and‑drop),
+  live counts, decks saved in the browser via **IndexedDB (Dexie)**, plus
+  load / delete / export.
+- **State**: Zustand for the working deck; React Router for Browse/Decks.
+- **Images**: in dev, a Vite middleware serves the legacy `Graphics/` art from
+  the parent CrossFire checkout under `/legacy/...` (production hosting is a
+  later step).
 
 ## Tech stack
 
-TypeScript · Zod (schema + validation) · Vitest (tests) · Biome (lint/format) ·
-tsx (runner) · pnpm. Chosen to keep everything in the target web stack with the
-schema as the reusable core; see the project plan for full rationale.
+TypeScript · Zod · Vite · React · Tailwind CSS · Radix UI · Zustand ·
+React Router · MiniSearch · Dexie · dnd‑kit · Vitest · Biome · pnpm workspaces.
 
 ## Roadmap
 
-1. **Data extraction → JSON** ✅ (this step)
-2. Read‑only web app: card browser, search, deck editor (local‑first)
-3. Accounts + persistence (Postgres)
+1. **Data extraction → JSON** ✅
+2. **Read‑only web app: browser, search, local‑first deck editor** ✅
+3. Accounts + persistence (server + Postgres)
 4. Real‑time chat/play server (replaces the legacy SPINS Tcl server)

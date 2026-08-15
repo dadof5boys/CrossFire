@@ -5,7 +5,7 @@ import {
   CardTypeSchema,
   type World,
   WorldSchema,
-} from './schema.js';
+} from '@spellfire/shared';
 import { extractBracedSet, splitList } from './tcl.js';
 
 /**

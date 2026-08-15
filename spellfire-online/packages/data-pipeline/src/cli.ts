@@ -1,20 +1,24 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { CardDatabaseSchema } from '@spellfire/shared';
 import { convertCards, loadReferenceTables } from './cards.js';
 import { convertCombos, convertDecks } from './decks.js';
+import { findCrossfireDir } from './paths.js';
 import { parseSets } from './reference.js';
-import { CardDatabaseSchema } from './schema.js';
-
-// This project lives at `<CrossFire>/spellfire-online`, so the legacy source
-// defaults to the parent directory (the CrossFire repo root).
-const DEFAULT_CROSSFIRE_DIR = join(process.cwd(), '..');
 
 async function writeJson(path: string, value: unknown): Promise<void> {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }
 
 async function main(): Promise<void> {
-  const crossfireDir = process.argv[2] ?? process.env.CROSSFIRE_DIR ?? DEFAULT_CROSSFIRE_DIR;
+  const crossfireDir =
+    process.argv[2] ?? process.env.CROSSFIRE_DIR ?? findCrossfireDir(process.cwd());
+  if (!crossfireDir) {
+    throw new Error(
+      'Could not locate a CrossFire checkout (no Scripts/CommonV.tcl found in any parent). ' +
+        'Pass the path explicitly: pnpm build:data /path/to/CrossFire',
+    );
+  }
   const outDir = join(process.cwd(), 'data');
   await mkdir(outDir, { recursive: true });
 

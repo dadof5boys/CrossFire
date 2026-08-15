@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { type Card, CardSchema, type CardType, type World } from '@spellfire/shared';
 import { buildUsesDecoder, parseCardTypes, parseWorlds } from './reference.js';
-import { type Card, CardSchema, type CardType, type World } from './schema.js';
 import { extractBracedSet, splitList } from './tcl.js';
 
 /** Number of positional fields in a card record (indices 0..12). */
