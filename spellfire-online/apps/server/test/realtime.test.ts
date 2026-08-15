@@ -16,6 +16,15 @@ const app = buildApp({
   loadDeck: async (_userId, deckId) => {
     if (deckId === 'deck-a') return { name: 'A Deck', cards: [{ cardId: '1st/43', qty: 8 }] };
     if (deckId === 'deck-b') return { name: 'B Deck', cards: [{ cardId: '1st/1', qty: 8 }] };
+    if (deckId === 'deck-c') {
+      return {
+        name: 'C Deck',
+        cards: [
+          { cardId: '1st/1', qty: 4 },
+          { cardId: '1st/42', qty: 4 },
+        ],
+      };
+    }
     return null;
   },
 });
@@ -57,7 +66,13 @@ function emitAck<T = unknown>(
 type PlayState = {
   status: string;
   phase: number;
-  lastCombat: { razed: boolean; attackerBonus: number; defenderBonus: number } | null;
+  lastCombat: {
+    razed: boolean;
+    attackerBonus: number;
+    defenderBonus: number;
+    attackerDiscarded?: boolean;
+  } | null;
+  battlefield: { attackerInstanceId: string; targetInstanceId: string } | null;
   seats: [
     {
       hand: unknown;
@@ -239,16 +254,77 @@ describe('realtime socket', () => {
     await emitAck(b, 'play:move', { tableId, instanceId: realm?.instanceId, toZone: 'realms' });
     await emitAck(b, 'play:pass-turn', { tableId });
 
-    const razed = waitForState(a, (v) => v.lastCombat?.razed === true);
+    const opened = waitForState(b, (v) => v.battlefield?.targetInstanceId === realm?.instanceId);
     await emitAck(a, 'play:attack', {
       tableId,
       attackerInstanceId: champ?.instanceId,
       targetInstanceId: realm?.instanceId,
     });
+    await opened;
+    const razed = waitForState(a, (v) => v.lastCombat?.razed === true);
+    await emitAck(b, 'play:decline-defend', { tableId });
     const after = await razed;
     expect(after.phase).toBe(4);
+    expect(after.battlefield).toBeNull();
     expect(after.lastCombat).toMatchObject({ attackerBonus: 3, defenderBonus: 0, razed: true });
     expect(after.seats[1].razedInstanceIds).toEqual([realm?.instanceId]);
+
+    a.close();
+    b.close();
+  });
+
+  it('discards the attacker when a stronger champion defends', async () => {
+    const a = await connect('user-d1', 'd1@example.com');
+    const b = await connect('user-d2', 'd2@example.com');
+    const table = await emitAck<{ id: string }>(a, 'table:create', { name: 'Defend Test' });
+    const tableId = table?.id;
+    expect(tableId).toBeTruthy();
+
+    await emitAck(b, 'table:join', { tableId });
+    await emitAck(b, 'play:sit', { tableId });
+    await emitAck(a, 'play:load-deck', { tableId, deckId: 'deck-a' });
+    await emitAck(b, 'play:load-deck', { tableId, deckId: 'deck-c' });
+
+    const started = waitForState(
+      a,
+      (v) => v.status === 'playing' && Array.isArray(v.seats[0].hand),
+    );
+    await emitAck(a, 'play:start', { tableId });
+    const viewA = await started;
+    const champ = (viewA.seats[0].hand as { instanceId: string }[])[0];
+    await emitAck(a, 'play:move', { tableId, instanceId: champ?.instanceId, toZone: 'pool' });
+    await emitAck(a, 'play:pass-turn', { tableId });
+
+    const bobReady = waitForState(
+      b,
+      (v) => v.status === 'playing' && Array.isArray(v.seats[1].hand),
+    );
+    await emitAck(b, 'play:sync', { tableId });
+    const viewB = await bobReady;
+    const bobHand = viewB.seats[1].hand as { instanceId: string; cardId: string }[];
+    const realm = bobHand.find((c) => c.cardId === '1st/1');
+    const defender = bobHand.find((c) => c.cardId === '1st/42');
+    expect(realm && defender).toBeTruthy();
+    await emitAck(b, 'play:move', { tableId, instanceId: realm?.instanceId, toZone: 'realms' });
+    await emitAck(b, 'play:move', { tableId, instanceId: defender?.instanceId, toZone: 'pool' });
+    await emitAck(b, 'play:pass-turn', { tableId });
+
+    await emitAck(a, 'play:attack', {
+      tableId,
+      attackerInstanceId: champ?.instanceId,
+      targetInstanceId: realm?.instanceId,
+    });
+    const resolved = waitForState(a, (v) => v.lastCombat?.attackerDiscarded === true);
+    await emitAck(b, 'play:defend', { tableId, defenderInstanceId: defender?.instanceId });
+    const after = await resolved;
+    expect(after.lastCombat).toMatchObject({
+      attackerBonus: 3,
+      defenderBonus: 7,
+      razed: false,
+      attackerDiscarded: true,
+    });
+    expect(after.seats[0].pool).toHaveLength(0);
+    expect(after.battlefield).toBeNull();
 
     a.close();
     b.close();

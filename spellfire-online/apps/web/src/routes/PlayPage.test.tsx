@@ -26,6 +26,8 @@ vi.mock('../realtime/RealtimeProvider.js', () => ({
     passTurn: vi.fn(),
     setPhase: vi.fn(),
     attack: vi.fn(),
+    defend: vi.fn(),
+    declineDefend: vi.fn(),
     syncPlay,
     joinTable,
     leaveTable: vi.fn(),
@@ -73,6 +75,7 @@ const lobby: PlayView = {
   ],
   spectators: [],
   lastCombat: null,
+  battlefield: null,
 };
 
 describe('PlayPage', () => {
@@ -130,5 +133,39 @@ describe('PlayPage', () => {
     expect(screen.getByRole('group', { name: /turn phase/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /combat/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /attack realm/i })).toBeInTheDocument();
+  });
+
+  it('shows defend and decline when an attack is waiting', () => {
+    usePlayStore.getState().applyState({
+      ...playing,
+      youSeat: 1,
+      activeSeat: 0,
+      battlefield: {
+        attackerInstanceId: 'p1',
+        attackerCardId: '1st/43',
+        targetInstanceId: 'r1',
+        targetCardId: '1st/1',
+        defenderInstanceId: null,
+        defenderCardId: null,
+      },
+      seats: [
+        playing.seats[0],
+        {
+          ...playing.seats[1],
+          occupant: { userId: 'a', email: 'a@example.com' },
+          pool: [{ instanceId: 'd1', cardId: '1st/42' }],
+          realms: [{ instanceId: 'r1', cardId: '1st/1' }],
+        },
+      ],
+    });
+    render(
+      <MemoryRouter initialEntries={['/play/t1']}>
+        <Routes>
+          <Route path="/play/:tableId" element={<PlayPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('button', { name: /defend with champion/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /decline defense/i })).toBeInTheDocument();
   });
 });

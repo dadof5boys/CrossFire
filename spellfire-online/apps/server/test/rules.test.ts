@@ -2,6 +2,7 @@ import {
   REALM_TYPE_ID,
   canMoveToZone,
   isChampionType,
+  resolveChampionCombat,
   resolveRealmAttack,
 } from '@spellfire/shared';
 import { describe, expect, it } from 'vitest';
@@ -40,5 +41,19 @@ describe('shared rules helpers', () => {
       attackerBonus: 5,
       defenderBonus: 5,
     });
+  });
+
+  it('requires a strictly greater champion bonus to win the battlefield', () => {
+    expect(resolveChampionCombat(7, 3)).toEqual({
+      attackerWins: true,
+      attackerBonus: 7,
+      defenderBonus: 3,
+    });
+    expect(resolveChampionCombat(3, 7)).toEqual({
+      attackerWins: false,
+      attackerBonus: 3,
+      defenderBonus: 7,
+    });
+    expect(resolveChampionCombat(5, 5).attackerWins).toBe(false);
   });
 });
