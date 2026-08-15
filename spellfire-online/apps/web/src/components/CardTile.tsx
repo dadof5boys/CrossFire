@@ -1,10 +1,15 @@
 import { useDraggable } from '@dnd-kit/core';
 import type { Card } from '@spellfire/shared';
+import { useAuth } from '../auth/AuthProvider.js';
+import { useAuthDialog } from '../auth/authDialogStore.js';
 import { cardImageUrl } from '../lib/images.js';
 import { useDeckStore } from '../store/deckStore.js';
 
 export function CardTile({ card, onSelect }: { card: Card; onSelect: (card: Card) => void }) {
   const add = useDeckStore((s) => s.add);
+  const { isAuthed } = useAuth();
+  const openAuth = useAuthDialog((s) => s.open);
+  const onAdd = () => (isAuthed ? add(card.id) : openAuth());
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `card:${card.id}`,
     data: { cardId: card.id },
@@ -50,7 +55,7 @@ export function CardTile({ card, onSelect }: { card: Card; onSelect: (card: Card
         </div>
         <button
           type="button"
-          onClick={() => add(card.id)}
+          onClick={onAdd}
           className="shrink-0 rounded bg-emerald-600 px-2 py-1 text-xs font-semibold hover:bg-emerald-500"
         >
           + Add

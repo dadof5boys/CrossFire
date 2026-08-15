@@ -14,10 +14,12 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "web": "pnpm --filter @spellfire/web dev",
-    "web:build": "pnpm --filter @spellfire/web build"
+    "web:build": "pnpm --filter @spellfire/web build",
+    "server": "pnpm --filter @spellfire/server start",
+    "server:dev": "pnpm --filter @spellfire/server dev"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["@biomejs/biome", "esbuild"]
+    "onlyBuiltDependencies": ["@biomejs/biome", "esbuild", "prisma", "@prisma/client", "@prisma/engines"]
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4"

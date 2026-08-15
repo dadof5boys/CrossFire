@@ -1,6 +1,8 @@
 import { DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { Card } from '@spellfire/shared';
 import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../auth/AuthProvider.js';
+import { useAuthDialog } from '../auth/authDialogStore.js';
 import { CardDetailDialog } from '../components/CardDetailDialog.js';
 import { CardTile } from '../components/CardTile.js';
 import { DeckPanel } from '../components/DeckPanel.js';
@@ -14,6 +16,8 @@ const PAGE_SIZE = 48;
 export default function BrowsePage() {
   const { db, index } = useDataset();
   const add = useDeckStore((s) => s.add);
+  const { isAuthed } = useAuth();
+  const openAuth = useAuthDialog((s) => s.open);
 
   const [filter, setFilter] = useState(EMPTY_FILTER);
   const [page, setPage] = useState(0);
@@ -32,7 +36,12 @@ export default function BrowsePage() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const onDragEnd = (e: DragEndEvent) => {
     const cardId = e.active.data.current?.cardId as string | undefined;
-    if (e.over?.id === 'deck-dropzone' && cardId) add(cardId);
+    if (e.over?.id !== 'deck-dropzone' || !cardId) return;
+    if (!isAuthed) {
+      openAuth();
+      return;
+    }
+    add(cardId);
   };
 
   return (

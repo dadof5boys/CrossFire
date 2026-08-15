@@ -4,14 +4,14 @@ import { type DeckEntry, addEntry, removeEntry, totalCount } from '../lib/deck.j
 interface DeckState {
   name: string;
   entries: DeckEntry[];
-  /** Id of the saved deck currently loaded (undefined = unsaved/new). */
-  currentId: number | undefined;
+  /** Id of the saved (server) deck currently loaded (undefined = unsaved/new). */
+  currentId: string | undefined;
   add: (cardId: string) => void;
   decrement: (cardId: string) => void;
   remove: (cardId: string) => void;
   setName: (name: string) => void;
   clear: () => void;
-  load: (deck: { id?: number; name: string; entries: DeckEntry[] }) => void;
+  load: (deck: { id?: string; name: string; entries: DeckEntry[] }) => void;
   count: () => number;
 }
 

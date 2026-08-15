@@ -1,7 +1,16 @@
 import { DndContext } from '@dnd-kit/core';
 import type { Card } from '@spellfire/shared';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// Avoid pulling in the Supabase client / network during this render test.
+vi.mock('../auth/AuthProvider.js', () => ({ useAuth: () => ({ isAuthed: true }) }));
+vi.mock('../auth/authDialogStore.js', () => ({
+  useAuthDialog: (
+    selector: (s: { isOpen: boolean; open: () => void; close: () => void }) => unknown,
+  ) => selector({ isOpen: false, open: () => {}, close: () => {} }),
+}));
+
 import { CardTile } from './CardTile.js';
 
 const card: Card = {
