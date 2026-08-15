@@ -1,5 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import type { Card } from '@spellfire/shared';
+import { useAuth } from '../auth/AuthProvider.js';
+import { useAuthDialog } from '../auth/authDialogStore.js';
 import { cardImageUrl } from '../lib/images.js';
 import { useDeckStore } from '../store/deckStore.js';
 
@@ -15,6 +17,8 @@ function Field({ label, value }: { label: string; value: string }) {
 
 export function CardDetailDialog({ card, onClose }: { card: Card | null; onClose: () => void }) {
   const add = useDeckStore((s) => s.add);
+  const { isAuthed } = useAuth();
+  const openAuth = useAuthDialog((s) => s.open);
   const img = card ? cardImageUrl(card) : null;
 
   return (
@@ -48,7 +52,7 @@ export function CardDetailDialog({ card, onClose }: { card: Card | null; onClose
                 <div className="mt-3 flex gap-2">
                   <button
                     type="button"
-                    onClick={() => add(card.id)}
+                    onClick={() => (isAuthed ? add(card.id) : openAuth())}
                     className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold hover:bg-emerald-500"
                   >
                     + Add to deck

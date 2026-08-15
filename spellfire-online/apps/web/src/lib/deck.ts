@@ -1,7 +1,6 @@
-export interface DeckEntry {
-  cardId: string;
-  qty: number;
-}
+import type { DeckEntry } from '@spellfire/shared';
+
+export type { DeckEntry };
 
 /**
  * Add `delta` copies of a card to the deck entries (immutably). A non-positive

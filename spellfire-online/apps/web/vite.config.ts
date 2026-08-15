@@ -55,5 +55,12 @@ function legacyMedia(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), legacyMedia()],
-  server: { host: true, port: 5173 },
+  server: {
+    host: true,
+    port: 5173,
+    // Proxy API calls to the Fastify server so the browser stays same-origin.
+    proxy: {
+      '/api': { target: 'http://localhost:8787', changeOrigin: true },
+    },
+  },
 });

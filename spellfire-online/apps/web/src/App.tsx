@@ -1,4 +1,7 @@
 import { NavLink, Route, Routes } from 'react-router-dom';
+import { AuthDialog } from './auth/AuthDialog.js';
+import { useAuth } from './auth/AuthProvider.js';
+import { useAuthDialog } from './auth/authDialogStore.js';
 import { DatasetProvider } from './data/DatasetProvider.js';
 import BrowsePage from './routes/BrowsePage.js';
 import DecksPage from './routes/DecksPage.js';
@@ -7,6 +10,35 @@ function navClass({ isActive }: { isActive: boolean }): string {
   return `rounded px-3 py-1.5 text-sm font-medium ${
     isActive ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-800'
   }`;
+}
+
+function AuthControls() {
+  const { isAuthed, user, signOut } = useAuth();
+  const openAuth = useAuthDialog((s) => s.open);
+
+  if (isAuthed) {
+    return (
+      <div className="flex items-center gap-3">
+        <span className="text-sm text-slate-400">{user?.email}</span>
+        <button
+          type="button"
+          onClick={() => void signOut()}
+          className="rounded bg-slate-700 px-3 py-1.5 text-sm hover:bg-slate-600"
+        >
+          Sign out
+        </button>
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={openAuth}
+      className="rounded bg-emerald-600 px-3 py-1.5 text-sm font-semibold hover:bg-emerald-500"
+    >
+      Sign in
+    </button>
+  );
 }
 
 export default function App() {
@@ -24,6 +56,9 @@ export default function App() {
             Decks
           </NavLink>
         </nav>
+        <div className="ml-auto">
+          <AuthControls />
+        </div>
       </header>
       <main className="min-h-0 flex-1">
         <DatasetProvider>
@@ -33,6 +68,7 @@ export default function App() {
           </Routes>
         </DatasetProvider>
       </main>
+      <AuthDialog />
     </div>
   );
 }
