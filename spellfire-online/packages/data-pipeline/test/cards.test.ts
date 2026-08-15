@@ -1,15 +1,15 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { Card } from '@spellfire/shared';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { convertCards, loadReferenceTables } from '../src/cards.js';
 import { parseCombo, parseDeck } from '../src/decks.js';
+import { findCrossfireDir } from '../src/paths.js';
 import { parseSets } from '../src/reference.js';
-import type { Card } from '../src/schema.js';
 
-// The project lives at `<CrossFire>/spellfire-online`; default to the repo root.
-const CROSSFIRE_DIR = process.env.CROSSFIRE_DIR ?? join(process.cwd(), '..');
-const hasSource = existsSync(join(CROSSFIRE_DIR, 'Scripts', 'CommonV.tcl'));
+const CROSSFIRE_DIR = process.env.CROSSFIRE_DIR ?? findCrossfireDir(process.cwd()) ?? '';
+const hasSource = CROSSFIRE_DIR !== '' && existsSync(join(CROSSFIRE_DIR, 'Scripts', 'CommonV.tcl'));
 
 describe.skipIf(!hasSource)('reference tables', () => {
   let commonV: string;

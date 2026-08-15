@@ -3,29 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Spellfire Online — web reimplementation of the CrossFire Spellfire client. Step 1: data extraction pipeline that converts the legacy Tcl card database into typed JSON.",
+  "description": "Web reimplementation of the CrossFire Spellfire client (pnpm workspace).",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "build:data": "tsx src/cli.ts",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "build:data": "pnpm --filter @spellfire/data-pipeline build:data",
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck",
     "lint": "biome check .",
-    "format": "biome format --write ."
-  },
-  "dependencies": {
-    "zod": "^3.23.8"
+    "format": "biome format --write .",
+    "web": "pnpm --filter @spellfire/web dev",
+    "web:build": "pnpm --filter @spellfire/web build"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["@biomejs/biome", "esbuild"]
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
-    "@types/node": "^22.10.0",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "@biomejs/biome": "^1.9.4"
   }
 }

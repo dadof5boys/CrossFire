@@ -8,7 +8,7 @@ import {
   ComboSchema,
   type Deck,
   DeckSchema,
-} from './schema.js';
+} from '@spellfire/shared';
 import { parseSetVars, splitList } from './tcl.js';
 
 /** Parse a `{set num} {set num} ...` list into typed card references. */
