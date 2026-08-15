@@ -12,8 +12,8 @@ parent directory.
 | --- | --- |
 | `packages/shared` (`@spellfire/shared`) | Zod schemas + inferred TypeScript types — the single source of truth for the data model, shared by every package. |
 | `packages/data-pipeline` (`@spellfire/data-pipeline`) | **Step 1.** Pure‑TypeScript Tcl → JSON converter (no Tcl runtime) producing `cards.json`, `decks.json`, `combos.json`. |
-| `apps/web` (`@spellfire/web`) | **Steps 2–4.** Vite + React card browser, deck editor, and realtime chat lobby. |
-| `apps/server` (`@spellfire/server`) | **Steps 3–4.** Fastify REST API + Prisma + Socket.IO chat/table lobby. |
+| `apps/web` (`@spellfire/web`) | **Steps 2–5.** Vite + React card browser, deck editor, chat lobby, and digital tabletop. |
+| `apps/server` (`@spellfire/server`) | **Steps 3–5.** Fastify REST API + Prisma + Socket.IO chat and tabletop. |
 | `supabase/` | Local Supabase stack config (`supabase start`) — Postgres + Auth. |
 
 ## Quick start
@@ -97,6 +97,21 @@ This is **not** a reimplementation of the legacy SPINS Tcl protocol, and it does
 - **Client**: `/chat` (sign-in required). Vite proxies `/socket.io` → `:8787` with
   WebSockets.
 
+## Step 5 — Digital tabletop (no rules engine)
+
+A table is a **game room**. The creator auto-sits; a second player can Sit
+(max 2). Spectators may watch public zones. Each seated player loads a **saved
+deck**; **Start** shuffles and deals 5 cards.
+
+- **Private**: your hand (full cards) and draw pile (count only).
+- **Public**: realms, pool/champions, discard — opponents see the card ids.
+- **Actions**: Draw, drag a card onto realms / pool / discard, Pass turn.
+- **Not in this step**: legal-play checks, combat, world alignment, formation
+  layouts. Humans referee, same as a physical table.
+- State is **in-memory** (lost on server restart), same as chat history.
+
+Open a table in Chat, then **Play** (`/play/:tableId`).
+
 ## Tech stack
 
 TypeScript · Zod · Vite · React · Tailwind CSS · Radix UI · Zustand ·
@@ -109,4 +124,5 @@ React Router · MiniSearch · TanStack Query · Fastify · Prisma · Supabase Au
 2. **Web app: browser, search, deck editor** ✅
 3. **Accounts + persistence (Supabase Auth + Fastify/Prisma)** ✅
 4. **Realtime chat + table lobby (Socket.IO)** ✅
-5. Actual Spellfire play (combat/rules) — later; may stay on Socket.IO or move to Colyseus.
+5. **Digital tabletop (shared board, private hands, no rules engine)** ✅
+6. Spellfire rules engine (combat, bonuses, legal plays) — later.

@@ -45,6 +45,8 @@ export const TableSummarySchema = z.object({
   id: z.string(),
   name: z.string(),
   occupants: z.array(OccupantSchema),
+  status: z.enum(['lobby', 'playing']).default('lobby'),
+  playerCount: z.number().int().nonnegative().default(0),
 });
 export type TableSummary = z.infer<typeof TableSummarySchema>;
 

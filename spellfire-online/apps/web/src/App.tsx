@@ -7,11 +7,25 @@ import { RealtimeProvider } from './realtime/RealtimeProvider.js';
 import BrowsePage from './routes/BrowsePage.js';
 import ChatPage from './routes/ChatPage.js';
 import DecksPage from './routes/DecksPage.js';
+import PlayPage from './routes/PlayPage.js';
+import { useChatStore } from './store/chatStore.js';
 
 function navClass({ isActive }: { isActive: boolean }): string {
   return `rounded px-3 py-1.5 text-sm font-medium ${
     isActive ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-800'
   }`;
+}
+
+function PlayNav() {
+  const { user } = useAuth();
+  const tables = useChatStore((s) => s.tables);
+  const mine = tables.find((t) => t.occupants.some((o) => o.userId === user?.id));
+  if (!mine) return null;
+  return (
+    <NavLink to={`/play/${mine.id}`} className={navClass}>
+      Play
+    </NavLink>
+  );
 }
 
 function AuthControls() {
@@ -60,6 +74,7 @@ export default function App() {
           <NavLink to="/chat" className={navClass}>
             Chat
           </NavLink>
+          <PlayNav />
         </nav>
         <div className="ml-auto">
           <AuthControls />
@@ -72,6 +87,7 @@ export default function App() {
               <Route path="/" element={<BrowsePage />} />
               <Route path="/decks" element={<DecksPage />} />
               <Route path="/chat" element={<ChatPage />} />
+              <Route path="/play/:tableId" element={<PlayPage />} />
             </Routes>
           </DatasetProvider>
         </RealtimeProvider>
