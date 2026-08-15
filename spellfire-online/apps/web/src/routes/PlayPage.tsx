@@ -83,7 +83,6 @@ export default function PlayPage() {
   const openAuth = useAuthDialog((s) => s.open);
   const rt = useRealtime();
   const view = usePlayStore((s) => s.view);
-  const tables = useChatStore((s) => s.tables);
   const tablesReady = useChatStore((s) => s.tablesReady);
   const { cardById } = useDataset();
   const decksQuery = useDecksQuery();
@@ -96,12 +95,12 @@ export default function PlayPage() {
 
   useEffect(() => {
     if (!tableId || !isAuthed || !tablesReady) return;
-    const alreadyHere = tables.some(
-      (t) => t.id === tableId && t.occupants.some((o) => o.userId === user?.id),
-    );
-    if (!alreadyHere) rt.joinTable(tableId);
+    // Always join this browser socket. Another tab/script may already list the
+    // same user as an occupant; skipping join then leaves this socket outside
+    // the table room so play:sync/play:state never arrive.
+    rt.joinTable(tableId);
     rt.syncPlay(tableId);
-  }, [tableId, isAuthed, tablesReady, tables, user?.id, rt]);
+  }, [tableId, isAuthed, tablesReady, rt]);
 
   if (!isAuthed) {
     return (
