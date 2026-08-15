@@ -66,6 +66,7 @@ export default function PlayPage() {
   const rt = useRealtime();
   const view = usePlayStore((s) => s.view);
   const tables = useChatStore((s) => s.tables);
+  const tablesReady = useChatStore((s) => s.tablesReady);
   const { cardById } = useDataset();
   const decksQuery = useDecksQuery();
   const [deckId, setDeckId] = useState('');
@@ -75,13 +76,13 @@ export default function PlayPage() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   useEffect(() => {
-    if (!tableId || !isAuthed) return;
+    if (!tableId || !isAuthed || !tablesReady) return;
     const alreadyHere = tables.some(
       (t) => t.id === tableId && t.occupants.some((o) => o.userId === user?.id),
     );
     if (!alreadyHere) rt.joinTable(tableId);
     rt.syncPlay(tableId);
-  }, [tableId, isAuthed, tables, user?.id, rt]);
+  }, [tableId, isAuthed, tablesReady, tables, user?.id, rt]);
 
   if (!isAuthed) {
     return (

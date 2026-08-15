@@ -11,6 +11,7 @@ export interface ChatState {
   messagesByChannel: Record<string, ChatMessage[]>;
   occupantsByChannel: Record<string, Occupant[]>;
   tables: TableSummary[];
+  tablesReady: boolean;
   whispers: Whisper[];
   error: string | null;
   setConnected: (connected: boolean) => void;
@@ -33,6 +34,7 @@ const empty = {
   messagesByChannel: {} as Record<string, ChatMessage[]>,
   occupantsByChannel: {} as Record<string, Occupant[]>,
   tables: [] as TableSummary[],
+  tablesReady: false,
   whispers: [] as Whisper[],
   error: null as string | null,
 };
@@ -76,7 +78,7 @@ export const useChatStore = create<ChatState>((set) => ({
     set((s) => ({
       whispers: [...s.whispers, whisper].slice(-50),
     })),
-  applyTables: (tables) => set({ tables }),
+  applyTables: (tables) => set({ tables, tablesReady: true }),
   setError: (error) => set({ error }),
   reset: () => set(empty),
 }));
