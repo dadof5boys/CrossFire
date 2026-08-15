@@ -12,8 +12,8 @@ parent directory.
 | --- | --- |
 | `packages/shared` (`@spellfire/shared`) | Zod schemas + inferred TypeScript types — the single source of truth for the data model, shared by every package. |
 | `packages/data-pipeline` (`@spellfire/data-pipeline`) | **Step 1.** Pure‑TypeScript Tcl → JSON converter (no Tcl runtime) producing `cards.json`, `decks.json`, `combos.json`. |
-| `apps/web` (`@spellfire/web`) | **Steps 2–5.** Vite + React card browser, deck editor, chat lobby, and digital tabletop. |
-| `apps/server` (`@spellfire/server`) | **Steps 3–5.** Fastify REST API + Prisma + Socket.IO chat and tabletop. |
+| `apps/web` (`@spellfire/web`) | **Steps 2–6.** Vite + React card browser, deck editor, chat lobby, and digital tabletop. |
+| `apps/server` (`@spellfire/server`) | **Steps 3–6.** Fastify REST API + Prisma + Socket.IO chat, tabletop, and rules. |
 | `supabase/` | Local Supabase stack config (`supabase start`) — Postgres + Auth. |
 
 ## Quick start
@@ -97,7 +97,7 @@ This is **not** a reimplementation of the legacy SPINS Tcl protocol, and it does
 - **Client**: `/chat` (sign-in required). Vite proxies `/socket.io` → `:8787` with
   WebSockets.
 
-## Step 5 — Digital tabletop (no rules engine)
+## Step 5 — Digital tabletop
 
 A table is a **game room**. The creator auto-sits; a second player can Sit
 (max 2). Spectators may watch public zones. Each seated player loads a **saved
@@ -106,11 +106,26 @@ deck**; **Start** shuffles and deals 5 cards.
 - **Private**: your hand (full cards) and draw pile (count only).
 - **Public**: realms, pool/champions, discard — opponents see the card ids.
 - **Actions**: Draw, drag a card onto realms / pool / discard, Pass turn.
-- **Not in this step**: legal-play checks, combat, world alignment, formation
-  layouts. Humans referee, same as a physical table.
 - State is **in-memory** (lost on server restart), same as chat history.
 
 Open a table in Chat, then **Play** (`/play/:tableId`).
+
+## Step 6 — Rules engine (first slice)
+
+The server now enforces a thin Spellfire rules layer. It looks up `typeId` and
+`bonus` from `packages/data-pipeline/data/cards.json` — clients cannot spoof
+card types.
+
+- **Turn**: only `activeSeat` may draw, move, set phase, or attack.
+- **Phase**: 0 Start / 1–3 build / 4 Combat / 5 End. Attack auto-advances to
+  phase 4 if the turn is still in a build phase, and is rejected in phase 5.
+- **Zones**: realms accept typeId 13 only; pool accepts champions
+  (5, 7, 10, 12, 14, 16, 20); discard accepts any; hand is fillable only via
+  Draw.
+- **Combat** (`play:attack`): a pool champion vs an opponent realm. If
+  `attacker.bonus ?? 0` is **strictly greater** than `realm.bonus ?? 0`, the
+  realm is marked **razed** (stays in formation). Attacker stays in the pool.
+  No spoils, attachments, or formation slots yet.
 
 ## Tech stack
 
@@ -124,5 +139,6 @@ React Router · MiniSearch · TanStack Query · Fastify · Prisma · Supabase Au
 2. **Web app: browser, search, deck editor** ✅
 3. **Accounts + persistence (Supabase Auth + Fastify/Prisma)** ✅
 4. **Realtime chat + table lobby (Socket.IO)** ✅
-5. **Digital tabletop (shared board, private hands, no rules engine)** ✅
-6. Spellfire rules engine (combat, bonuses, legal plays) — later.
+5. **Digital tabletop (shared board, private hands)** ✅
+6. **Rules engine first slice (turn, zones, realm attack)** ✅
+7. Holdings, formation A–F, battlefield, spoils, full legal-play — later.

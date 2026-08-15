@@ -1,5 +1,5 @@
 import type { PlayView } from '@spellfire/shared';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -24,6 +24,8 @@ vi.mock('../realtime/RealtimeProvider.js', () => ({
     draw: vi.fn(),
     move: vi.fn(),
     passTurn: vi.fn(),
+    setPhase: vi.fn(),
+    attack: vi.fn(),
     syncPlay,
     joinTable,
     leaveTable: vi.fn(),
@@ -45,6 +47,7 @@ const lobby: PlayView = {
   status: 'lobby',
   activeSeat: 0,
   turnNumber: 1,
+  phase: 0,
   youSeat: 0,
   seats: [
     {
@@ -55,6 +58,7 @@ const lobby: PlayView = {
       pool: [],
       realms: [],
       discard: [],
+      razedInstanceIds: [],
     },
     {
       occupant: null,
@@ -64,9 +68,11 @@ const lobby: PlayView = {
       pool: [],
       realms: [],
       discard: [],
+      razedInstanceIds: [],
     },
   ],
   spectators: [],
+  lastCombat: null,
 };
 
 describe('PlayPage', () => {
@@ -77,6 +83,27 @@ describe('PlayPage', () => {
     usePlayStore.getState().reset();
     usePlayStore.getState().applyState(lobby);
   });
+
+  const playing: PlayView = {
+    ...lobby,
+    status: 'playing',
+    phase: 0,
+    seats: [
+      {
+        ...lobby.seats[0],
+        deckName: 'A Deck',
+        hand: [],
+        drawCount: 3,
+        pool: [{ instanceId: 'p1', cardId: '1st/43' }],
+      },
+      {
+        ...lobby.seats[1],
+        occupant: { userId: 'b', email: 'b@example.com' },
+        deckName: 'B Deck',
+        realms: [{ instanceId: 'r1', cardId: '1st/1' }],
+      },
+    ],
+  };
 
   it('shows the lobby controls to load a deck and start', () => {
     render(
@@ -89,5 +116,21 @@ describe('PlayPage', () => {
     expect(screen.getByText('Arena')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /start game/i })).toBeInTheDocument();
     expect(screen.getByLabelText('Choose deck')).toBeInTheDocument();
+  });
+
+  it('shows phase radios and an attack button when a champion and realm are selected', () => {
+    usePlayStore.getState().applyState(playing);
+    render(
+      <MemoryRouter initialEntries={['/play/t1']}>
+        <Routes>
+          <Route path="/play/:tableId" element={<PlayPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('group', { name: /turn phase/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /combat/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByTitle('1st/43'));
+    fireEvent.click(screen.getByTitle('1st/1'));
+    expect(screen.getByRole('button', { name: /attack realm/i })).toBeInTheDocument();
   });
 });

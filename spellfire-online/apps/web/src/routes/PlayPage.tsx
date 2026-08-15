@@ -6,7 +6,15 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import type { Card, CardInstance, HiddenPile, PlayZone, SeatView } from '@spellfire/shared';
+import type {
+  Card,
+  CardInstance,
+  HiddenPile,
+  PlayPhase,
+  PlayZone,
+  SeatView,
+} from '@spellfire/shared';
+import { PHASE_LABELS, canMoveToZone } from '@spellfire/shared';
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.js';
@@ -59,6 +67,16 @@ function FaceDownRow({ count }: { count: number }) {
   );
 }
 
+function findInstance(seat: SeatView, instanceId: string): CardInstance | undefined {
+  const piles = [
+    ...(Array.isArray(seat.hand) ? seat.hand : []),
+    ...seat.pool,
+    ...seat.realms,
+    ...seat.discard,
+  ];
+  return piles.find((c) => c.instanceId === instanceId);
+}
+
 export default function PlayPage() {
   const { tableId } = useParams<{ tableId: string }>();
   const { isAuthed, user } = useAuth();
@@ -72,6 +90,7 @@ export default function PlayPage() {
   const [deckId, setDeckId] = useState('');
   const [detail, setDetail] = useState<Card | null>(null);
   const [held, setHeld] = useState<string | null>(null);
+  const [target, setTarget] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -108,19 +127,24 @@ export default function PlayPage() {
   const you = youSeat !== null ? view?.seats[youSeat] : undefined;
   const foeSeat = youSeat === 0 ? 1 : youSeat === 1 ? 0 : 1;
   const foe = view?.seats[foeSeat];
+  const myTurn = view?.status === 'playing' && youSeat !== null && view.activeSeat === youSeat;
+  const heldCard = you && held ? findInstance(you, held) : undefined;
+  const heldTypeId = heldCard ? cardById.get(heldCard.cardId)?.typeId : undefined;
+  const heldInPool = Boolean(held && you?.pool.some((c) => c.instanceId === held));
+  const canAttack = Boolean(myTurn && heldInPool && target);
 
   const onDragEnd = (event: DragEndEvent) => {
     const instanceId = event.active.data.current?.instanceId as string | undefined;
     const overId = event.over?.id;
     if (!instanceId || typeof overId !== 'string' || !overId.startsWith('zone:')) return;
     const toZone = overId.slice('zone:'.length) as PlayZone;
-    if (toZone === 'draw') return;
+    if (toZone === 'draw' || toZone === 'hand') return;
     rt.move(tableId, instanceId, toZone);
     setHeld(null);
   };
 
-  const playHeld = (toZone: PlayZone) => {
-    if (!tableId || !held || toZone === 'draw') return;
+  const playHeld = (toZone: 'pool' | 'realms' | 'discard') => {
+    if (!tableId || !held) return;
     rt.move(tableId, held, toZone);
     setHeld(null);
   };
@@ -130,15 +154,19 @@ export default function PlayPage() {
     if (deckId) rt.loadDeck(tableId, deckId);
   };
 
-  const renderCards = (cards: CardInstance[], draggable: boolean) =>
+  const renderCards = (
+    cards: CardInstance[],
+    opts: { draggable?: boolean; razedIds?: string[]; pickable?: boolean },
+  ) =>
     cards.map((instance) => (
       <PlayCard
         key={instance.instanceId}
         instance={instance}
         card={cardById.get(instance.cardId)}
-        draggable={draggable}
-        selected={held === instance.instanceId}
-        onPick={draggable ? setHeld : undefined}
+        draggable={opts.draggable}
+        selected={held === instance.instanceId || target === instance.instanceId}
+        razed={opts.razedIds?.includes(instance.instanceId)}
+        onPick={opts.pickable ? setHeld : undefined}
         onSelect={setDetail}
       />
     ));
@@ -153,7 +181,7 @@ export default function PlayPage() {
           <h2 className="text-lg font-semibold">{view?.tableName ?? 'Table'}</h2>
           <span className="text-xs text-slate-500">
             {view?.status === 'playing'
-              ? `Turn ${view.turnNumber} · ${view.seats[view.activeSeat].occupant?.email ?? 'empty'} to play`
+              ? `Turn ${view.turnNumber} · ${PHASE_LABELS[view.phase]} · ${view.seats[view.activeSeat].occupant?.email ?? 'empty'} to play`
               : 'Lobby — load a deck, then start'}
           </span>
           {youSeat === null ? (
@@ -175,6 +203,35 @@ export default function PlayPage() {
           )}
         </header>
 
+        {view?.status === 'playing' ? (
+          <fieldset className="m-0 flex flex-wrap items-center gap-1 border-0 p-0">
+            <legend className="sr-only">Turn phase</legend>
+            {PHASE_LABELS.map((label, i) => (
+              <button
+                key={label}
+                type="button"
+                disabled={!myTurn}
+                aria-pressed={view.phase === i}
+                onClick={() => rt.setPhase(tableId, i as PlayPhase)}
+                className={`rounded px-2 py-1 text-xs ${
+                  view.phase === i
+                    ? 'bg-amber-700 font-semibold text-white'
+                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 disabled:opacity-40'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </fieldset>
+        ) : null}
+
+        {view?.lastCombat ? (
+          <p className="text-sm text-slate-300" data-testid="last-combat">
+            Combat: {view.lastCombat.attackerBonus} vs {view.lastCombat.defenderBonus}
+            {view.lastCombat.razed ? ' — realm razed' : ' — realm holds'}
+          </p>
+        ) : null}
+
         {foe ? (
           <section className="rounded-lg border border-slate-800 p-3">
             <h3 className="mb-2 text-sm font-semibold text-slate-300">
@@ -192,17 +249,33 @@ export default function PlayPage() {
               <Zone id="foe-draw" label={`Draw (${foe.drawCount})`} accept={false}>
                 <FaceDownRow count={foe.drawCount} />
               </Zone>
-              <Zone id="foe-realms" label="Realms" accept={false}>
-                {renderCards(foe.realms, false)}
+              <Zone id="foe-realms" label="Realms (click to target)" accept={false}>
+                {foe.realms.map((instance) => (
+                  <PlayCard
+                    key={instance.instanceId}
+                    instance={instance}
+                    card={cardById.get(instance.cardId)}
+                    selected={target === instance.instanceId}
+                    razed={foe.razedInstanceIds.includes(instance.instanceId)}
+                    onPick={
+                      myTurn
+                        ? (id) => {
+                            setTarget(id);
+                          }
+                        : undefined
+                    }
+                    onSelect={setDetail}
+                  />
+                ))}
               </Zone>
               <Zone id="foe-pool" label="Pool / champions" accept={false}>
-                {renderCards(foe.pool, false)}
+                {renderCards(foe.pool, {})}
               </Zone>
             </div>
             {foe.discard.length > 0 ? (
               <div className="mt-2">
                 <p className="mb-1 text-[10px] font-semibold uppercase text-slate-500">Discard</p>
-                <div className="flex flex-wrap gap-1">{renderCards(foe.discard, false)}</div>
+                <div className="flex flex-wrap gap-1">{renderCards(foe.discard, {})}</div>
               </div>
             ) : null}
           </section>
@@ -215,14 +288,32 @@ export default function PlayPage() {
                 You ({user?.email}){you.deckName ? ` · ${you.deckName}` : ' · no deck'}
               </h3>
               <div className="grid gap-2 md:grid-cols-3">
-                <Zone id="zone:realms" label="Realms" accept={view?.status === 'playing'}>
-                  {renderCards(you.realms, view?.status === 'playing')}
+                <Zone
+                  id="zone:realms"
+                  label="Realms"
+                  accept={
+                    myTurn &&
+                    (heldTypeId === undefined || canMoveToZone(heldTypeId, 'realms') === null)
+                  }
+                >
+                  {renderCards(you.realms, {
+                    draggable: myTurn,
+                    razedIds: you.razedInstanceIds,
+                    pickable: myTurn,
+                  })}
                 </Zone>
-                <Zone id="zone:pool" label="Pool / champions" accept={view?.status === 'playing'}>
-                  {renderCards(you.pool, view?.status === 'playing')}
+                <Zone
+                  id="zone:pool"
+                  label="Pool / champions"
+                  accept={
+                    myTurn &&
+                    (heldTypeId === undefined || canMoveToZone(heldTypeId, 'pool') === null)
+                  }
+                >
+                  {renderCards(you.pool, { draggable: myTurn, pickable: myTurn })}
                 </Zone>
-                <Zone id="zone:discard" label="Discard" accept={view?.status === 'playing'}>
-                  {renderCards(you.discard, view?.status === 'playing')}
+                <Zone id="zone:discard" label="Discard" accept={myTurn}>
+                  {renderCards(you.discard, { draggable: myTurn, pickable: myTurn })}
                 </Zone>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -231,34 +322,52 @@ export default function PlayPage() {
                   <>
                     <button
                       type="button"
+                      disabled={!myTurn}
                       onClick={() => rt.draw(tableId)}
-                      className="rounded bg-sky-700 px-3 py-1 text-sm font-semibold hover:bg-sky-600"
+                      className="rounded bg-sky-700 px-3 py-1 text-sm font-semibold hover:bg-sky-600 disabled:opacity-40"
                     >
                       Draw
                     </button>
                     <button
                       type="button"
+                      disabled={!myTurn}
                       onClick={() => rt.passTurn(tableId)}
-                      className="rounded bg-slate-700 px-3 py-1 text-sm hover:bg-slate-600"
+                      className="rounded bg-slate-700 px-3 py-1 text-sm hover:bg-slate-600 disabled:opacity-40"
                     >
                       Pass turn
                     </button>
-                    {held ? (
+                    {canAttack ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (held && target) rt.attack(tableId, held, target);
+                        }}
+                        className="rounded bg-red-700 px-3 py-1 text-sm font-semibold hover:bg-red-600"
+                      >
+                        Attack realm
+                      </button>
+                    ) : null}
+                    {held && myTurn ? (
                       <>
-                        <button
-                          type="button"
-                          onClick={() => playHeld('pool')}
-                          className="rounded bg-emerald-700 px-3 py-1 text-sm font-semibold hover:bg-emerald-600"
-                        >
-                          Play to pool
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => playHeld('realms')}
-                          className="rounded bg-emerald-800 px-3 py-1 text-sm font-semibold hover:bg-emerald-700"
-                        >
-                          Play to realms
-                        </button>
+                        {heldTypeId === undefined || canMoveToZone(heldTypeId, 'pool') === null ? (
+                          <button
+                            type="button"
+                            onClick={() => playHeld('pool')}
+                            className="rounded bg-emerald-700 px-3 py-1 text-sm font-semibold hover:bg-emerald-600"
+                          >
+                            Play to pool
+                          </button>
+                        ) : null}
+                        {heldTypeId === undefined ||
+                        canMoveToZone(heldTypeId, 'realms') === null ? (
+                          <button
+                            type="button"
+                            onClick={() => playHeld('realms')}
+                            className="rounded bg-emerald-800 px-3 py-1 text-sm font-semibold hover:bg-emerald-700"
+                          >
+                            Play to realms
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => playHeld('discard')}
@@ -307,11 +416,12 @@ export default function PlayPage() {
             <section className="rounded-lg border border-slate-800 p-3">
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                 Your hand {Array.isArray(you.hand) ? `(${you.hand.length})` : ''} — click a card,
-                then Play to pool / realms / discard (or drag)
+                then Play to pool / realms / discard (or drag). Select a pool champion and an
+                opponent realm to attack.
               </p>
-              <Zone id="zone:hand" label="" accept={view?.status === 'playing'}>
+              <Zone id="zone:hand" label="" accept={false}>
                 {Array.isArray(you.hand) ? (
-                  renderCards(you.hand, view?.status === 'playing')
+                  renderCards(you.hand, { draggable: myTurn, pickable: myTurn })
                 ) : (
                   <FaceDownRow count={you.hand.count} />
                 )}

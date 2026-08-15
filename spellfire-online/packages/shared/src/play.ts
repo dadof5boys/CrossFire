@@ -21,6 +21,25 @@ export type HiddenPile = z.infer<typeof HiddenPileSchema>;
 export const PlayStatusSchema = z.enum(['lobby', 'playing']);
 export type PlayStatus = z.infer<typeof PlayStatusSchema>;
 
+export const PlayPhaseSchema = z.union([
+  z.literal(0),
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+  z.literal(5),
+]);
+export type PlayPhase = z.infer<typeof PlayPhaseSchema>;
+
+export const CombatResultSchema = z.object({
+  attackerInstanceId: z.string(),
+  targetInstanceId: z.string(),
+  attackerBonus: z.number(),
+  defenderBonus: z.number(),
+  razed: z.boolean(),
+});
+export type CombatResult = z.infer<typeof CombatResultSchema>;
+
 export const SeatViewSchema = z.object({
   occupant: OccupantSchema.nullable(),
   deckName: z.string().nullable(),
@@ -29,6 +48,7 @@ export const SeatViewSchema = z.object({
   pool: z.array(CardInstanceSchema),
   realms: z.array(CardInstanceSchema),
   discard: z.array(CardInstanceSchema),
+  razedInstanceIds: z.array(z.string()),
 });
 export type SeatView = z.infer<typeof SeatViewSchema>;
 
@@ -38,9 +58,11 @@ export const PlayViewSchema = z.object({
   status: PlayStatusSchema,
   activeSeat: z.union([z.literal(0), z.literal(1)]),
   turnNumber: z.number().int().positive(),
+  phase: PlayPhaseSchema,
   youSeat: z.union([z.literal(0), z.literal(1)]).nullable(),
   seats: z.tuple([SeatViewSchema, SeatViewSchema]),
   spectators: z.array(OccupantSchema),
+  lastCombat: CombatResultSchema.nullable(),
 });
 export type PlayView = z.infer<typeof PlayViewSchema>;
 
@@ -53,5 +75,14 @@ export const PlayLoadDeckPayloadSchema = z.object({
 export const PlayMovePayloadSchema = z.object({
   tableId: z.string().min(1),
   instanceId: z.string().min(1),
-  toZone: PlayZoneSchema.exclude(['draw']),
+  toZone: PlayZoneSchema.exclude(['draw', 'hand']),
+});
+export const PlayAttackPayloadSchema = z.object({
+  tableId: z.string().min(1),
+  attackerInstanceId: z.string().min(1),
+  targetInstanceId: z.string().min(1),
+});
+export const PlaySetPhasePayloadSchema = z.object({
+  tableId: z.string().min(1),
+  phase: PlayPhaseSchema,
 });

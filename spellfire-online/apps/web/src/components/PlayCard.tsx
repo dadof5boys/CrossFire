@@ -8,6 +8,7 @@ export function PlayCard({
   faceDown,
   draggable,
   selected,
+  razed,
   onPick,
   onSelect,
 }: {
@@ -16,6 +17,7 @@ export function PlayCard({
   faceDown?: boolean;
   draggable?: boolean;
   selected?: boolean;
+  razed?: boolean;
   onPick?: (instanceId: string) => void;
   onSelect?: (card: Card) => void;
 }) {
@@ -39,9 +41,11 @@ export function PlayCard({
       }}
       title={title}
       aria-pressed={selected}
-      className={`h-24 w-[4.3rem] shrink-0 overflow-hidden rounded border bg-slate-800 ${
+      className={`relative h-24 w-[4.3rem] shrink-0 overflow-hidden rounded border bg-slate-800 ${
         selected ? 'border-emerald-400 ring-2 ring-emerald-400' : 'border-slate-700'
-      } ${draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${isDragging ? 'opacity-40' : ''}`}
+      } ${draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${isDragging ? 'opacity-40' : ''} ${
+        razed ? 'opacity-70' : ''
+      }`}
     >
       {img ? (
         <img src={img} alt={title} className="h-full w-full object-cover pointer-events-none" />
@@ -50,6 +54,11 @@ export function PlayCard({
           {faceDown ? '🂠' : title}
         </span>
       )}
+      {razed ? (
+        <span className="absolute inset-x-0 bottom-0 bg-red-800/90 text-center text-[9px] font-bold uppercase tracking-wide text-red-100">
+          Razed
+        </span>
+      ) : null}
     </button>
   );
 }
