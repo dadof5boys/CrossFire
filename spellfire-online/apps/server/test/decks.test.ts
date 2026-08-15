@@ -14,7 +14,9 @@ function tokenFor(userId: string): string {
 
 const app: FastifyInstance = buildApp({
   verifyToken: async (token) =>
-    token.startsWith('test-token:') ? token.slice('test-token:'.length) : null,
+    token.startsWith('test-token:')
+      ? { userId: token.slice('test-token:'.length), email: `${token.slice(11, 19)}@test.local` }
+      : null,
 });
 
 function authHeader(userId: string) {

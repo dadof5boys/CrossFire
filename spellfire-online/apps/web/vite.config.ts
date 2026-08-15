@@ -61,6 +61,7 @@ export default defineConfig({
     // Proxy API calls to the Fastify server so the browser stays same-origin.
     proxy: {
       '/api': { target: 'http://localhost:8787', changeOrigin: true },
+      '/socket.io': { target: 'http://localhost:8787', ws: true, changeOrigin: true },
     },
   },
 });

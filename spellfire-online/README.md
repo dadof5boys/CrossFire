@@ -12,8 +12,8 @@ parent directory.
 | --- | --- |
 | `packages/shared` (`@spellfire/shared`) | Zod schemas + inferred TypeScript types — the single source of truth for the data model, shared by every package. |
 | `packages/data-pipeline` (`@spellfire/data-pipeline`) | **Step 1.** Pure‑TypeScript Tcl → JSON converter (no Tcl runtime) producing `cards.json`, `decks.json`, `combos.json`. |
-| `apps/web` (`@spellfire/web`) | **Steps 2–3.** Vite + React card browser and deck editor (login required to save). |
-| `apps/server` (`@spellfire/server`) | **Step 3.** Fastify REST API + Prisma, with decks stored in the local Supabase Postgres. |
+| `apps/web` (`@spellfire/web`) | **Steps 2–4.** Vite + React card browser, deck editor, and realtime chat lobby. |
+| `apps/server` (`@spellfire/server`) | **Steps 3–4.** Fastify REST API + Prisma + Socket.IO chat/table lobby. |
 | `supabase/` | Local Supabase stack config (`supabase start`) — Postgres + Auth. |
 
 ## Quick start
@@ -35,10 +35,10 @@ pnpm --filter @spellfire/server prisma:migrate
 # Step 1 — regenerate the dataset from the parent CrossFire checkout.
 pnpm build:data
 
-# Step 3 — API (http://localhost:8787)
+# Step 3/4 — API + Socket.IO (http://localhost:8787)
 pnpm --filter @spellfire/server start
 
-# Step 2/3 — web app (http://localhost:5173); Vite proxies /api -> :8787
+# Step 2–4 — web app (http://localhost:5173); Vite proxies /api and /socket.io -> :8787
 pnpm web
 
 # Repo-wide checks
@@ -83,15 +83,30 @@ combos into typed, Zod‑validated JSON.
 - **Client**: TanStack Query for server deck CRUD; Zustand holds the in-progress
   (unsaved) working deck.
 
+## Step 4 — Realtime chat + table lobby (Socket.IO)
+
+Chat and a thin table lobby run on the **same Fastify process** via Socket.IO.
+This is **not** a reimplementation of the legacy SPINS Tcl protocol, and it does
+**not** include Spellfire combat/rules.
+
+- **Auth**: handshake `auth.token` is the Supabase access token (same JWT as REST).
+- **Chat**: auto-join `Main`; optional extra channels; `/tell email text` whispers.
+- **Presence**: who's in the current channel.
+- **Tables**: create / join / leave; list is broadcast to every connected socket.
+- **History**: last 50 messages **in memory only** (ephemeral; lost on restart).
+- **Client**: `/chat` (sign-in required). Vite proxies `/socket.io` → `:8787` with
+  WebSockets.
+
 ## Tech stack
 
 TypeScript · Zod · Vite · React · Tailwind CSS · Radix UI · Zustand ·
 React Router · MiniSearch · TanStack Query · Fastify · Prisma · Supabase Auth
-· dnd‑kit · Vitest · Biome · pnpm workspaces.
+· Socket.IO · dnd‑kit · Vitest · Biome · pnpm workspaces.
 
 ## Roadmap
 
 1. **Data extraction → JSON** ✅
 2. **Web app: browser, search, deck editor** ✅
 3. **Accounts + persistence (Supabase Auth + Fastify/Prisma)** ✅
-4. Real‑time chat/play server (replaces the legacy SPINS Tcl server)
+4. **Realtime chat + table lobby (Socket.IO)** ✅
+5. Actual Spellfire play (combat/rules) — later; may stay on Socket.IO or move to Colyseus.
