@@ -1,5 +1,5 @@
 import type { PlayView } from '@spellfire/shared';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -118,7 +118,7 @@ describe('PlayPage', () => {
     expect(screen.getByLabelText('Choose deck')).toBeInTheDocument();
   });
 
-  it('shows phase radios and an attack button when a champion and realm are selected', () => {
+  it('shows phase radios and an attack button when a champion can hit a realm', () => {
     usePlayStore.getState().applyState(playing);
     render(
       <MemoryRouter initialEntries={['/play/t1']}>
@@ -129,8 +129,6 @@ describe('PlayPage', () => {
     );
     expect(screen.getByRole('group', { name: /turn phase/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /combat/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByTitle('1st/43'));
-    fireEvent.click(screen.getByTitle('1st/1'));
     expect(screen.getByRole('button', { name: /attack realm/i })).toBeInTheDocument();
   });
 });

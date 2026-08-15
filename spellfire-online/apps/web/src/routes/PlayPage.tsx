@@ -130,7 +130,12 @@ export default function PlayPage() {
   const heldCard = you && held ? findInstance(you, held) : undefined;
   const heldTypeId = heldCard ? cardById.get(heldCard.cardId)?.typeId : undefined;
   const heldInPool = Boolean(held && you?.pool.some((c) => c.instanceId === held));
-  const canAttack = Boolean(myTurn && heldInPool && target);
+  const attackAttackerId = heldInPool ? held : (you?.pool[0]?.instanceId ?? null);
+  const attackTargetId =
+    target && foe && !foe.razedInstanceIds.includes(target)
+      ? target
+      : (foe?.realms.find((c) => !foe.razedInstanceIds.includes(c.instanceId))?.instanceId ?? null);
+  const canAttack = Boolean(myTurn && attackAttackerId && attackTargetId);
 
   const onDragEnd = (event: DragEndEvent) => {
     const instanceId = event.active.data.current?.instanceId as string | undefined;
@@ -339,7 +344,9 @@ export default function PlayPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          if (held && target) rt.attack(tableId, held, target);
+                          if (attackAttackerId && attackTargetId) {
+                            rt.attack(tableId, attackAttackerId, attackTargetId);
+                          }
                         }}
                         className="rounded bg-red-700 px-3 py-1 text-sm font-semibold hover:bg-red-600"
                       >
