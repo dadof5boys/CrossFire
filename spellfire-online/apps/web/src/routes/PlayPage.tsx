@@ -69,7 +69,8 @@ export default function PlayPage() {
   const { cardById } = useDataset();
   const decksQuery = useDecksQuery();
   const [deckId, setDeckId] = useState('');
-  const [selected, setSelected] = useState<Card | null>(null);
+  const [detail, setDetail] = useState<Card | null>(null);
+  const [held, setHeld] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -114,6 +115,13 @@ export default function PlayPage() {
     const toZone = overId.slice('zone:'.length) as PlayZone;
     if (toZone === 'draw') return;
     rt.move(tableId, instanceId, toZone);
+    setHeld(null);
+  };
+
+  const playHeld = (toZone: PlayZone) => {
+    if (!tableId || !held || toZone === 'draw') return;
+    rt.move(tableId, held, toZone);
+    setHeld(null);
   };
 
   const loadDeck = (e: FormEvent) => {
@@ -128,7 +136,9 @@ export default function PlayPage() {
         instance={instance}
         card={cardById.get(instance.cardId)}
         draggable={draggable}
-        onSelect={setSelected}
+        selected={held === instance.instanceId}
+        onPick={draggable ? setHeld : undefined}
+        onSelect={setDetail}
       />
     ));
 
@@ -232,6 +242,31 @@ export default function PlayPage() {
                     >
                       Pass turn
                     </button>
+                    {held ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => playHeld('pool')}
+                          className="rounded bg-emerald-700 px-3 py-1 text-sm font-semibold hover:bg-emerald-600"
+                        >
+                          Play to pool
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => playHeld('realms')}
+                          className="rounded bg-emerald-800 px-3 py-1 text-sm font-semibold hover:bg-emerald-700"
+                        >
+                          Play to realms
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => playHeld('discard')}
+                          className="rounded bg-slate-600 px-3 py-1 text-sm hover:bg-slate-500"
+                        >
+                          Discard
+                        </button>
+                      </>
+                    ) : null}
                   </>
                 ) : (
                   <>
@@ -270,8 +305,8 @@ export default function PlayPage() {
 
             <section className="rounded-lg border border-slate-800 p-3">
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
-                Your hand {Array.isArray(you.hand) ? `(${you.hand.length})` : ''} — drag onto
-                realms, pool, or discard
+                Your hand {Array.isArray(you.hand) ? `(${you.hand.length})` : ''} — click a card,
+                then Play to pool / realms / discard (or drag)
               </p>
               <Zone id="zone:hand" label="" accept={view?.status === 'playing'}>
                 {Array.isArray(you.hand) ? (
@@ -288,7 +323,7 @@ export default function PlayPage() {
           </p>
         )}
       </div>
-      <CardDetailDialog card={selected} onClose={() => setSelected(null)} />
+      <CardDetailDialog card={detail} onClose={() => setDetail(null)} />
     </DndContext>
   );
 }
