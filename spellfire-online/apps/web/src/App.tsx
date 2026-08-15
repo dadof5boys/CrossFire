@@ -3,7 +3,9 @@ import { AuthDialog } from './auth/AuthDialog.js';
 import { useAuth } from './auth/AuthProvider.js';
 import { useAuthDialog } from './auth/authDialogStore.js';
 import { DatasetProvider } from './data/DatasetProvider.js';
+import { RealtimeProvider } from './realtime/RealtimeProvider.js';
 import BrowsePage from './routes/BrowsePage.js';
+import ChatPage from './routes/ChatPage.js';
 import DecksPage from './routes/DecksPage.js';
 
 function navClass({ isActive }: { isActive: boolean }): string {
@@ -55,18 +57,24 @@ export default function App() {
           <NavLink to="/decks" className={navClass}>
             Decks
           </NavLink>
+          <NavLink to="/chat" className={navClass}>
+            Chat
+          </NavLink>
         </nav>
         <div className="ml-auto">
           <AuthControls />
         </div>
       </header>
       <main className="min-h-0 flex-1">
-        <DatasetProvider>
-          <Routes>
-            <Route path="/" element={<BrowsePage />} />
-            <Route path="/decks" element={<DecksPage />} />
-          </Routes>
-        </DatasetProvider>
+        <RealtimeProvider>
+          <DatasetProvider>
+            <Routes>
+              <Route path="/" element={<BrowsePage />} />
+              <Route path="/decks" element={<DecksPage />} />
+              <Route path="/chat" element={<ChatPage />} />
+            </Routes>
+          </DatasetProvider>
+        </RealtimeProvider>
       </main>
       <AuthDialog />
     </div>

@@ -17,4 +17,12 @@ CrossFire is a legacy **Tcl/Tk desktop GUI application** (for the Spellfire card
 
 ### Offline vs. online functionality
 - All local features work fully offline: card database browsing (`DataBase/*.tcl`), the **DeckIt!** deck editor (saves `.cfd` files to `Decks/`), Card Warehouse (inventory), ComboMan, Swap Shop, Fan Set editor, Solitaire, printing/reports.
-- **Online real-time chat/play** connects to an external server (`cfserver.spellfire.net:10000`) that is **not part of this repo and cannot be run locally** — treat it as optional/unreachable when testing.
+- **Online real-time chat/play** (legacy Tcl client) connects to an external server (`cfserver.spellfire.net:10000`) that is **not part of this repo**. A local SPINS checkout may be used instead. The web reimplementation does **not** speak that Tcl protocol.
+
+## Spellfire Online (`spellfire-online/`)
+
+Web reimplementation of CrossFire. Canonical commands and stack notes live in `spellfire-online/README.md`.
+
+- **Dev stack**: pnpm workspace. Vite web app on **5173**, Fastify API + Socket.IO on **8787**, local Supabase (`supabase start` from `spellfire-online/`) for Auth + Postgres.
+- **Chat**: Socket.IO on the Fastify process (ephemeral in-memory history). Vite must proxy `/socket.io` with `ws: true` — connecting the browser straight to `:8787` works too, but same-origin via the Vite proxy is the supported path.
+- Restart the Fastify process after server-side Socket.IO changes; the old process will not pick them up. Auth tokens come from the signed-in Supabase session (`auth.token` on the handshake).

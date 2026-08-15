@@ -1,6 +1,7 @@
 import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { type TokenVerifier, verifySupabaseToken } from './auth.js';
+import { attachRealtime } from './realtime/socket.js';
 import { registerDeckRoutes } from './routes/decks.js';
 
 declare module 'fastify' {
@@ -27,16 +28,21 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.decorate('authenticate', async (req: FastifyRequest, reply: FastifyReply) => {
     const header = req.headers.authorization;
     const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
-    const userId = token ? await verifyToken(token) : null;
-    if (!userId) {
+    const identity = token ? await verifyToken(token) : null;
+    if (!identity) {
       await reply.code(401).send({ error: 'Unauthorized' });
       return;
     }
-    req.userId = userId;
+    req.userId = identity.userId;
   });
 
   app.get('/api/health', async () => ({ status: 'ok' }));
   registerDeckRoutes(app);
+
+  const { io } = attachRealtime(app.server, { verifyToken });
+  app.addHook('onClose', async () => {
+    io.close();
+  });
 
   return app;
 }
