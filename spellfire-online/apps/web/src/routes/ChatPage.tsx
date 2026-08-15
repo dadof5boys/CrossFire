@@ -1,5 +1,6 @@
 import { DEFAULT_CHAT_CHANNEL, MAX_CHAT_TEXT } from '@spellfire/shared';
 import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.js';
 import { useAuthDialog } from '../auth/authDialogStore.js';
 import { useRealtime } from '../realtime/RealtimeProvider.js';
@@ -170,10 +171,19 @@ export default function ChatPage() {
                   >
                     <span className="block truncate font-medium">{table.name}</span>
                     <span className="text-xs text-slate-500">
-                      {table.occupants.length} seated
+                      {table.occupants.length} here · {table.playerCount}/2 seated
+                      {table.status === 'playing' ? ' · playing' : ''}
                       {myTable?.id === table.id ? ' · click to leave' : ''}
                     </span>
                   </button>
+                  {myTable?.id === table.id ? (
+                    <Link
+                      to={`/play/${table.id}`}
+                      className="mt-1 block rounded bg-emerald-700 px-2 py-1 text-center text-xs font-semibold hover:bg-emerald-600"
+                    >
+                      Play
+                    </Link>
+                  ) : null}
                 </li>
               ))}
             </ul>

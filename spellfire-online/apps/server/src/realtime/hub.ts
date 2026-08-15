@@ -3,8 +3,10 @@ import {
   type ChatMessage,
   DEFAULT_CHAT_CHANNEL,
   type Occupant,
+  type PlayView,
   type TableSummary,
 } from '@spellfire/shared';
+import { PlayTable } from './play.js';
 
 const MAX_HISTORY = 50;
 
@@ -27,6 +29,8 @@ export class RealtimeHub {
   private readonly socketChannels = new Map<string, Set<string>>();
   /** socketId -> table id (at most one table at a time) */
   private readonly socketTable = new Map<string, string>();
+  /** tableId -> digital tabletop session */
+  private readonly games = new Map<string, PlayTable>();
 
   joinChannel(socketId: string, occupant: Occupant, channel: string): ChatMessage[] {
     let members = this.channels.get(channel);
@@ -126,6 +130,9 @@ export class RealtimeHub {
     const occupants = new Map<string, Occupant>([[socketId, occupant]]);
     this.tables.set(id, { id, name, occupants });
     this.socketTable.set(socketId, id);
+    const game = new PlayTable(id, name);
+    game.sit(socketId, occupant);
+    this.games.set(id, game);
     return this.tableSummary(id) as TableSummary;
   }
 
@@ -144,7 +151,11 @@ export class RealtimeHub {
     const table = this.tables.get(tableId);
     table?.occupants.delete(socketId);
     this.socketTable.delete(socketId);
-    if (table && table.occupants.size === 0) this.tables.delete(tableId);
+    this.games.get(tableId)?.standBySocket(socketId);
+    if (table && table.occupants.size === 0) {
+      this.tables.delete(tableId);
+      this.games.delete(tableId);
+    }
     return tableId;
   }
 
@@ -163,7 +174,38 @@ export class RealtimeHub {
       id: table.id,
       name: table.name,
       occupants: [...unique.values()],
+      status: this.games.get(tableId)?.status ?? 'lobby',
+      playerCount: this.games.get(tableId)?.playerCount ?? 0,
     };
+  }
+
+  currentTable(socketId: string): string | undefined {
+    return this.socketTable.get(socketId);
+  }
+
+  socketIdsAtTable(tableId: string): string[] {
+    return [...(this.tables.get(tableId)?.occupants.keys() ?? [])];
+  }
+
+  forEachTableSocket(tableId: string, fn: (socketId: string, userId: string) => void): void {
+    const table = this.tables.get(tableId);
+    if (!table) return;
+    for (const [socketId, occ] of table.occupants) fn(socketId, occ.userId);
+  }
+
+  getPlay(tableId: string): PlayTable | undefined {
+    return this.games.get(tableId);
+  }
+
+  playView(tableId: string, viewerId: string): PlayView | null {
+    const table = this.tables.get(tableId);
+    const game = this.games.get(tableId);
+    if (!table || !game) return null;
+    const seated = new Set(game.seatedUserIds());
+    const unique = new Map<string, Occupant>();
+    for (const occ of table.occupants.values()) unique.set(occ.userId, occ);
+    const spectators = [...unique.values()].filter((o) => !seated.has(o.userId));
+    return game.viewFor(viewerId, spectators);
   }
 }
 

@@ -28,3 +28,8 @@ export const SavedDeckSchema = z.object({
   updatedAt: z.string(),
 });
 export type SavedDeck = z.infer<typeof SavedDeckSchema>;
+
+/** Expand qty entries into a flat list of card ids (one per copy). */
+export function expandDeck(entries: DeckEntry[]): string[] {
+  return entries.flatMap((e) => Array.from({ length: e.qty }, () => e.cardId));
+}

@@ -1,6 +1,8 @@
 import cors from '@fastify/cors';
+import type { DeckEntry } from '@spellfire/shared';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { type TokenVerifier, verifySupabaseToken } from './auth.js';
+import { prisma } from './prisma.js';
 import { attachRealtime } from './realtime/socket.js';
 import { registerDeckRoutes } from './routes/decks.js';
 
@@ -16,6 +18,11 @@ declare module 'fastify' {
 export interface BuildAppOptions {
   /** Override token verification (used by tests to inject a fixed user). */
   verifyToken?: TokenVerifier;
+  /** Override saved-deck lookup for play:load-deck (tests inject a fixture). */
+  loadDeck?: (
+    userId: string,
+    deckId: string,
+  ) => Promise<{ name: string; cards: DeckEntry[] } | null>;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -39,7 +46,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   app.get('/api/health', async () => ({ status: 'ok' }));
   registerDeckRoutes(app);
 
-  const { io } = attachRealtime(app.server, { verifyToken });
+  const loadDeck =
+    options.loadDeck ??
+    (async (userId, deckId) => {
+      const deck = await prisma.deck.findFirst({ where: { id: deckId, userId } });
+      if (!deck) return null;
+      return { name: deck.name, cards: deck.cards as DeckEntry[] };
+    });
+
+  const { io } = attachRealtime(app.server, { verifyToken, loadDeck });
   app.addHook('onClose', async () => {
     io.close();
   });

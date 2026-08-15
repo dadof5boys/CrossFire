@@ -24,5 +24,5 @@ CrossFire is a legacy **Tcl/Tk desktop GUI application** (for the Spellfire card
 Web reimplementation of CrossFire. Canonical commands and stack notes live in `spellfire-online/README.md`.
 
 - **Dev stack**: pnpm workspace. Vite web app on **5173**, Fastify API + Socket.IO on **8787**, local Supabase (`supabase start` from `spellfire-online/`) for Auth + Postgres.
-- **Chat**: Socket.IO on the Fastify process (ephemeral in-memory history). Vite must proxy `/socket.io` with `ws: true` — connecting the browser straight to `:8787` works too, but same-origin via the Vite proxy is the supported path.
+- **Chat / play**: Socket.IO on the Fastify process (ephemeral in-memory state). Vite must proxy `/socket.io` with `ws: true`. `/play/:tableId` is the digital tabletop; sitting, loading a saved deck, drawing, and dragging cards do **not** enforce Spellfire rules.
 - Restart the Fastify process after server-side Socket.IO changes; the old process will not pick them up. Auth tokens come from the signed-in Supabase session (`auth.token` on the handshake).

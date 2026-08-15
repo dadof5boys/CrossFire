@@ -28,7 +28,11 @@ describe('chatStore', () => {
 
   it('tracks presence, tables, and whispers', () => {
     useChatStore.getState().applyPresence(DEFAULT_CHAT_CHANNEL, [alice]);
-    useChatStore.getState().applyTables([{ id: 't1', name: 'Arena', occupants: [alice] }]);
+    useChatStore
+      .getState()
+      .applyTables([
+        { id: 't1', name: 'Arena', occupants: [alice], status: 'lobby', playerCount: 1 },
+      ]);
     useChatStore.getState().applyWhisper({
       id: 'w1',
       from: alice,

@@ -1,3 +1,4 @@
+import { expandDeck } from '@spellfire/shared';
 import { describe, expect, it } from 'vitest';
 import { addEntry, removeEntry, totalCount } from './deck.js';
 
@@ -38,5 +39,14 @@ describe('deck logic', () => {
         { cardId: 'b', qty: 3 },
       ]),
     ).toBe(5);
+  });
+
+  it('expands quantities into a flat list of copies', () => {
+    expect(
+      expandDeck([
+        { cardId: '1st/1', qty: 2 },
+        { cardId: 'FR/2', qty: 1 },
+      ]),
+    ).toEqual(['1st/1', '1st/1', 'FR/2']);
   });
 });

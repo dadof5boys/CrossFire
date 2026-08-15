@@ -1,9 +1,10 @@
-import type { ChatMessage, Occupant, TableSummary, Whisper } from '@spellfire/shared';
+import type { ChatMessage, Occupant, PlayView, TableSummary, Whisper } from '@spellfire/shared';
 import { DEFAULT_CHAT_CHANNEL } from '@spellfire/shared';
 import { type ReactNode, createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import { type Socket, io } from 'socket.io-client';
 import { useAuth } from '../auth/AuthProvider.js';
 import { useChatStore } from '../store/chatStore.js';
+import { usePlayStore } from '../store/playStore.js';
 
 export interface RealtimeApi {
   say: (text: string) => void;
@@ -13,6 +14,18 @@ export interface RealtimeApi {
   createTable: (name: string) => void;
   joinTable: (tableId: string) => void;
   leaveTable: (tableId: string) => void;
+  sit: (tableId: string) => void;
+  stand: (tableId: string) => void;
+  loadDeck: (tableId: string, deckId: string) => void;
+  start: (tableId: string) => void;
+  draw: (tableId: string) => void;
+  move: (
+    tableId: string,
+    instanceId: string,
+    toZone: 'hand' | 'pool' | 'realms' | 'discard',
+  ) => void;
+  passTurn: (tableId: string) => void;
+  syncPlay: (tableId: string) => void;
 }
 
 const noopApi: RealtimeApi = {
@@ -23,6 +36,14 @@ const noopApi: RealtimeApi = {
   createTable: () => {},
   joinTable: () => {},
   leaveTable: () => {},
+  sit: () => {},
+  stand: () => {},
+  loadDeck: () => {},
+  start: () => {},
+  draw: () => {},
+  move: () => {},
+  passTurn: () => {},
+  syncPlay: () => {},
 };
 
 const RealtimeContext = createContext<RealtimeApi>(noopApi);
@@ -48,6 +69,9 @@ function bindStore(socket: Socket): void {
   socket.on('table:list', (payload: { tables: TableSummary[] }) => {
     store().applyTables(payload.tables);
   });
+  socket.on('play:state', (view: PlayView) => {
+    usePlayStore.getState().applyState(view);
+  });
 }
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {
@@ -61,6 +85,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       socketRef.current?.disconnect();
       socketRef.current = null;
       useChatStore.getState().reset();
+      usePlayStore.getState().reset();
       return;
     }
 
@@ -76,6 +101,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       socket.disconnect();
       if (socketRef.current === socket) socketRef.current = null;
       useChatStore.getState().reset();
+      usePlayStore.getState().reset();
     };
   }, [loading, isAuthed, token]);
 
@@ -113,6 +139,14 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       createTable: (name) => emit('table:create', { name }),
       joinTable: (tableId) => emit('table:join', { tableId }),
       leaveTable: (tableId) => emit('table:leave', { tableId }),
+      sit: (tableId) => emit('play:sit', { tableId }),
+      stand: (tableId) => emit('play:stand', { tableId }),
+      loadDeck: (tableId, deckId) => emit('play:load-deck', { tableId, deckId }),
+      start: (tableId) => emit('play:start', { tableId }),
+      draw: (tableId) => emit('play:draw', { tableId }),
+      move: (tableId, instanceId, toZone) => emit('play:move', { tableId, instanceId, toZone }),
+      passTurn: (tableId) => emit('play:pass-turn', { tableId }),
+      syncPlay: (tableId) => emit('play:sync', { tableId }),
     };
   }, []);
 

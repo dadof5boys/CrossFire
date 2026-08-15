@@ -6,6 +6,10 @@ import {
   ChatSayPayloadSchema,
   ChatTellPayloadSchema,
   DEFAULT_CHAT_CHANNEL,
+  type DeckEntry,
+  PlayLoadDeckPayloadSchema,
+  PlayMovePayloadSchema,
+  PlayTableIdPayloadSchema,
   TableCreatePayloadSchema,
   TableJoinPayloadSchema,
   TableLeavePayloadSchema,
@@ -28,9 +32,14 @@ function tableRoom(tableId: string): string {
   return `table:${tableId}`;
 }
 
+export type DeckLoader = (
+  userId: string,
+  deckId: string,
+) => Promise<{ name: string; cards: DeckEntry[] } | null>;
+
 export function attachRealtime(
   httpServer: HttpServer,
-  options: { verifyToken: TokenVerifier; hub?: RealtimeHub },
+  options: { verifyToken: TokenVerifier; hub?: RealtimeHub; loadDeck?: DeckLoader },
 ): { io: Server; hub: RealtimeHub } {
   const hub = options.hub ?? new RealtimeHub();
   const io = new Server(httpServer, {
@@ -58,6 +67,13 @@ export function attachRealtime(
 
   const broadcastTables = () => {
     io.emit('table:list', { tables: hub.listTables() });
+  };
+
+  const emitPlay = (tableId: string) => {
+    hub.forEachTableSocket(tableId, (socketId, userId) => {
+      const view = hub.playView(tableId, userId);
+      if (view) io.to(socketId).emit('play:state', view);
+    });
   };
 
   io.on('connection', (socket) => {
@@ -155,6 +171,7 @@ export function attachRealtime(
       const table = hub.createTable(socket.id, me(), parsed.data.name);
       void socket.join(tableRoom(table.id));
       broadcastTables();
+      emitPlay(table.id);
       ack?.(null, table);
     });
 
@@ -173,6 +190,7 @@ export function attachRealtime(
       }
       void socket.join(tableRoom(table.id));
       broadcastTables();
+      emitPlay(table.id);
       ack?.(null);
     });
 
@@ -185,17 +203,188 @@ export function attachRealtime(
       hub.leaveTable(socket.id);
       void socket.leave(tableRoom(parsed.data.tableId));
       broadcastTables();
+      emitPlay(parsed.data.tableId);
+      ack?.(null);
+    });
+
+    const atTable = (tableId: string, ack?: (err: string | null) => void): boolean => {
+      if (hub.currentTable(socket.id) !== tableId) {
+        ack?.('Not at this table');
+        return false;
+      }
+      return true;
+    };
+
+    socket.on('play:sync', (raw, ack?: (err: string | null) => void) => {
+      const parsed = PlayTableIdPayloadSchema.safeParse(raw);
+      if (!parsed.success) {
+        ack?.('Invalid table');
+        return;
+      }
+      if (!atTable(parsed.data.tableId, ack)) return;
+      emitPlay(parsed.data.tableId);
+      ack?.(null);
+    });
+
+    socket.on('play:sit', (raw, ack?: (err: string | null) => void) => {
+      const parsed = PlayTableIdPayloadSchema.safeParse(raw);
+      if (!parsed.success) {
+        ack?.('Invalid table');
+        return;
+      }
+      if (!atTable(parsed.data.tableId, ack)) return;
+      const game = hub.getPlay(parsed.data.tableId);
+      if (!game) {
+        ack?.('Table not found');
+        return;
+      }
+      const result = game.sit(socket.id, me());
+      if (typeof result === 'string') {
+        ack?.(result);
+        return;
+      }
+      broadcastTables();
+      emitPlay(parsed.data.tableId);
+      ack?.(null);
+    });
+
+    socket.on('play:stand', (raw, ack?: (err: string | null) => void) => {
+      const parsed = PlayTableIdPayloadSchema.safeParse(raw);
+      if (!parsed.success) {
+        ack?.('Invalid table');
+        return;
+      }
+      if (!atTable(parsed.data.tableId, ack)) return;
+      hub.getPlay(parsed.data.tableId)?.standBySocket(socket.id);
+      broadcastTables();
+      emitPlay(parsed.data.tableId);
+      ack?.(null);
+    });
+
+    socket.on('play:load-deck', async (raw, ack?: (err: string | null) => void) => {
+      const parsed = PlayLoadDeckPayloadSchema.safeParse(raw);
+      if (!parsed.success) {
+        ack?.('Invalid deck');
+        return;
+      }
+      if (!atTable(parsed.data.tableId, ack)) return;
+      const game = hub.getPlay(parsed.data.tableId);
+      if (!game) {
+        ack?.('Table not found');
+        return;
+      }
+      if (!options.loadDeck) {
+        ack?.('Decks unavailable');
+        return;
+      }
+      const deck = await options.loadDeck(me().userId, parsed.data.deckId);
+      if (!deck) {
+        ack?.('Deck not found');
+        return;
+      }
+      const err = game.loadDeck(me().userId, deck.name, deck.cards);
+      if (err) {
+        ack?.(err);
+        return;
+      }
+      emitPlay(parsed.data.tableId);
+      ack?.(null);
+    });
+
+    socket.on('play:start', (raw, ack?: (err: string | null) => void) => {
+      const parsed = PlayTableIdPayloadSchema.safeParse(raw);
+      if (!parsed.success) {
+        ack?.('Invalid table');
+        return;
+      }
+      if (!atTable(parsed.data.tableId, ack)) return;
+      const game = hub.getPlay(parsed.data.tableId);
+      if (!game) {
+        ack?.('Table not found');
+        return;
+      }
+      const err = game.start();
+      if (err) {
+        ack?.(err);
+        return;
+      }
+      broadcastTables();
+      emitPlay(parsed.data.tableId);
+      ack?.(null);
+    });
+
+    socket.on('play:draw', (raw, ack?: (err: string | null) => void) => {
+      const parsed = PlayTableIdPayloadSchema.safeParse(raw);
+      if (!parsed.success) {
+        ack?.('Invalid table');
+        return;
+      }
+      if (!atTable(parsed.data.tableId, ack)) return;
+      const game = hub.getPlay(parsed.data.tableId);
+      if (!game) {
+        ack?.('Table not found');
+        return;
+      }
+      const err = game.draw(me().userId);
+      if (err) {
+        ack?.(err);
+        return;
+      }
+      emitPlay(parsed.data.tableId);
+      ack?.(null);
+    });
+
+    socket.on('play:move', (raw, ack?: (err: string | null) => void) => {
+      const parsed = PlayMovePayloadSchema.safeParse(raw);
+      if (!parsed.success) {
+        ack?.('Invalid move');
+        return;
+      }
+      if (!atTable(parsed.data.tableId, ack)) return;
+      const game = hub.getPlay(parsed.data.tableId);
+      if (!game) {
+        ack?.('Table not found');
+        return;
+      }
+      const err = game.move(me().userId, parsed.data.instanceId, parsed.data.toZone);
+      if (err) {
+        ack?.(err);
+        return;
+      }
+      emitPlay(parsed.data.tableId);
+      ack?.(null);
+    });
+
+    socket.on('play:pass-turn', (raw, ack?: (err: string | null) => void) => {
+      const parsed = PlayTableIdPayloadSchema.safeParse(raw);
+      if (!parsed.success) {
+        ack?.('Invalid table');
+        return;
+      }
+      if (!atTable(parsed.data.tableId, ack)) return;
+      const game = hub.getPlay(parsed.data.tableId);
+      if (!game) {
+        ack?.('Table not found');
+        return;
+      }
+      const err = game.passTurn(me().userId);
+      if (err) {
+        ack?.(err);
+        return;
+      }
+      emitPlay(parsed.data.tableId);
       ack?.(null);
     });
 
     socket.on('disconnect', () => {
-      const { channels } = hub.leaveAll(socket.id);
+      const { channels, tableId } = hub.leaveAll(socket.id);
       for (const channel of channels) {
         const sys = hub.recordSystem(channel, `${me().email} has left ${channel}`);
         io.to(channelRoom(channel)).emit('chat:message', sys);
         broadcastPresence(channel);
       }
       broadcastTables();
+      if (tableId) emitPlay(tableId);
     });
   });
 

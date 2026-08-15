@@ -13,6 +13,11 @@ const app = buildApp({
     const parts = token.split(':');
     return { userId: parts[1] ?? '', email: parts[2] ?? `${parts[1]}@test.local` };
   },
+  loadDeck: async (_userId, deckId) => {
+    if (deckId === 'deck-a') return { name: 'A Deck', cards: [{ cardId: '1st/1', qty: 8 }] };
+    if (deckId === 'deck-b') return { name: 'B Deck', cards: [{ cardId: 'FR/2', qty: 8 }] };
+    return null;
+  },
 });
 
 function connect(userId: string, email: string): Promise<ClientSocket> {
@@ -31,6 +36,46 @@ function connect(userId: string, email: string): Promise<ClientSocket> {
 function once<T>(socket: ClientSocket, event: string): Promise<T> {
   return new Promise((resolve) => {
     socket.once(event, (payload: T) => resolve(payload));
+  });
+}
+
+function emitAck<T = unknown>(
+  socket: ClientSocket,
+  event: string,
+  payload: unknown,
+): Promise<T | undefined> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${event} ack timed out`)), 4000);
+    socket.emit(event, payload, (err: string | null, extra?: T) => {
+      clearTimeout(timer);
+      if (err) reject(new Error(`${event}: ${err}`));
+      else resolve(extra);
+    });
+  });
+}
+
+function waitForState(
+  socket: ClientSocket,
+  pred: (view: {
+    status: string;
+    seats: [{ hand: unknown; pool: { cardId: string }[] }, { hand: unknown }];
+  }) => boolean,
+): Promise<{
+  status: string;
+  seats: [{ hand: unknown; pool: { cardId: string }[] }, { hand: unknown }];
+}> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('play:state timed out')), 4000);
+    const onState = (view: {
+      status: string;
+      seats: [{ hand: unknown; pool: { cardId: string }[] }, { hand: unknown }];
+    }) => {
+      if (!pred(view)) return;
+      clearTimeout(timer);
+      socket.off('play:state', onState);
+      resolve(view);
+    };
+    socket.on('play:state', onState);
   });
 }
 
@@ -97,6 +142,44 @@ describe('realtime socket', () => {
     a.emit('table:create', { name: 'Arena 1' });
     const payload = await listed;
     expect(payload.tables.some((t) => t.name === 'Arena 1')).toBe(true);
+    a.close();
+    b.close();
+  });
+
+  it('starts a tabletop and hides the opponent hand', async () => {
+    const a = await connect('user-p1', 'p1@example.com');
+    const b = await connect('user-p2', 'p2@example.com');
+    const table = await emitAck<{ id: string; name: string }>(a, 'table:create', {
+      name: 'Play Test',
+    });
+    const tableId = table?.id;
+    expect(tableId).toBeTruthy();
+
+    await emitAck(b, 'table:join', { tableId });
+    await emitAck(b, 'play:sit', { tableId });
+    await emitAck(a, 'play:load-deck', { tableId, deckId: 'deck-a' });
+    await emitAck(b, 'play:load-deck', { tableId, deckId: 'deck-b' });
+
+    const startedA = waitForState(
+      a,
+      (v) => v.status === 'playing' && Array.isArray(v.seats[0].hand),
+    );
+    const startedB = waitForState(
+      b,
+      (v) => v.status === 'playing' && !Array.isArray(v.seats[0].hand),
+    );
+    await emitAck(a, 'play:start', { tableId });
+    const viewA = await startedA;
+    const viewB = await startedB;
+    expect(viewA.seats[0].hand).toHaveLength(5);
+    expect(viewB.seats[0].hand).toEqual({ count: 5 });
+
+    const hand = viewA.seats[0].hand as { instanceId: string; cardId: string }[];
+    const moved = waitForState(b, (v) => v.seats[0].pool.length > 0);
+    await emitAck(a, 'play:move', { tableId, instanceId: hand[0]?.instanceId, toZone: 'pool' });
+    const after = await moved;
+    expect(after.seats[0].pool.some((c) => c.cardId === '1st/1')).toBe(true);
+
     a.close();
     b.close();
   });
