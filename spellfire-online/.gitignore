@@ -1,0 +1,7 @@
+node_modules/
+*.log
+.DS_Store
+coverage/
+dist/
+# Vendored legacy source (input), if copied locally for reproducibility
+vendor/
