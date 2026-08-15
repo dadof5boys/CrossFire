@@ -36,7 +36,10 @@ export function PlayCard({
       {...(draggable ? listeners : {})}
       {...(draggable ? attributes : {})}
       onClick={() => {
-        onPick?.(instance.instanceId);
+        if (onPick) {
+          onPick(instance.instanceId);
+          return;
+        }
         if (card && !faceDown) onSelect?.(card);
       }}
       title={title}
