@@ -14,7 +14,13 @@ import type {
   PlayZone,
   SeatView,
 } from '@spellfire/shared';
-import { PHASE_LABELS, canMoveToZone, isAllyType } from '@spellfire/shared';
+import {
+  PHASE_LABELS,
+  canMoveToZone,
+  championCanUse,
+  isAllyType,
+  isSpellType,
+} from '@spellfire/shared';
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.js';
@@ -158,6 +164,26 @@ export default function PlayPage() {
       ? held
       : (handAllies[0]?.instanceId ?? null);
   const canAddAlly = Boolean(canPlayAlly && allyId);
+  const myChampionCardId = isAttacker
+    ? view?.battlefield?.attackerCardId
+    : view?.battlefield?.defenderCardId;
+  const myChampion = myChampionCardId ? cardById.get(myChampionCardId) : undefined;
+  const handSpells = Array.isArray(you?.hand)
+    ? you.hand.filter((c) => {
+        const spell = cardById.get(c.cardId);
+        return Boolean(
+          spell && isSpellType(spell.typeId) && championCanUse(myChampion?.usesCodes, spell.typeId),
+        );
+      })
+    : [];
+  const spellId =
+    heldInHand &&
+    heldTypeId !== undefined &&
+    isSpellType(heldTypeId) &&
+    championCanUse(myChampion?.usesCodes, heldTypeId)
+      ? held
+      : (handSpells[0]?.instanceId ?? null);
+  const canCastSpell = Boolean(canPlayAlly && spellId);
 
   const onDragEnd = (event: DragEndEvent) => {
     const instanceId = event.active.data.current?.instanceId as string | undefined;
@@ -288,11 +314,26 @@ export default function PlayPage() {
                     .join(', ')}
             </p>
             <p className="mt-1 text-xs text-slate-400">
+              Attacker spells:{' '}
+              {view.battlefield.attackerSpells.length === 0
+                ? 'none'
+                : view.battlefield.attackerSpells
+                    .map((c) => cardById.get(c.cardId)?.title ?? c.cardId)
+                    .join(', ')}
+              {' · '}
+              Defender spells:{' '}
+              {view.battlefield.defenderSpells.length === 0
+                ? 'none'
+                : view.battlefield.defenderSpells
+                    .map((c) => cardById.get(c.cardId)?.title ?? c.cardId)
+                    .join(', ')}
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
               {isDefender && !defenderCommitted
                 ? 'Choose a pool champion to defend, or decline and let the realm stand alone.'
                 : defenderCommitted
-                  ? 'Add allies from your hand, then resolve combat.'
-                  : 'Waiting for the defender to send a champion or decline. You may add allies now.'}
+                  ? 'Add allies or cast spells from your hand, then resolve combat.'
+                  : 'Waiting for the defender to send a champion or decline. You may add allies or cast spells now.'}
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               {isDefender && !defenderCommitted ? (
@@ -329,6 +370,20 @@ export default function PlayPage() {
                   className="rounded bg-violet-700 px-3 py-1 text-sm font-semibold hover:bg-violet-600"
                 >
                   Add ally
+                </button>
+              ) : null}
+              {canCastSpell ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (spellId) {
+                      rt.cast(tableId, spellId);
+                      setHeld(null);
+                    }
+                  }}
+                  className="rounded bg-indigo-700 px-3 py-1 text-sm font-semibold hover:bg-indigo-600"
+                >
+                  Cast spell
                 </button>
               ) : null}
               {defenderCommitted && (isAttacker || isDefender) ? (
@@ -547,7 +602,7 @@ export default function PlayPage() {
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                 Your hand {Array.isArray(you.hand) ? `(${you.hand.length})` : ''} — click a card,
                 then Play to pool / realms / discard (or drag). Select a pool champion and an
-                opponent realm to attack. During a fight, select an ally and Add ally.
+                opponent realm to attack. During a fight, select an ally or spell.
               </p>
               <Zone id="zone:hand" label="" accept={false}>
                 {Array.isArray(you.hand) ? (

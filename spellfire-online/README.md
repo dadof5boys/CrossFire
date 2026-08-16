@@ -129,11 +129,12 @@ card types.
   - Defended: compare champion bonuses. Attacker wins → realm razed, both
     champions stay in pool. Defender holds (tie or better) → attacker is
     discarded, realm unrazed.
-  Allies (`play:ally`) may attach from hand (typeId 1) onto a champion already
-  in the fight. Combat totals are champion bonus + ally bonuses. After a
-  champion defends, either fighter `play:resolve`s. Attached allies go to
-  discard when the fight ends. No spells, items, formation, holdings, or
-  spoils yet.
+  Allies (`play:ally`) and combat spells (`play:cast`, wizard typeId 19 or
+  cleric typeId 4) may attach from hand onto a champion already in the fight.
+  Spells also require the champion’s catalog `usesCodes`. Combat totals are
+  champion + ally + spell bonuses. After a champion defends, either fighter
+  `play:resolve`s. Attachments go to discard when the fight ends. No items,
+  formation, holdings, or spoils yet.
 
 ## Step 8 — Battlefield allies
 
@@ -148,6 +149,20 @@ While a battlefield is open, either seated player may play an **Ally**
   the attacker is discarded.
 - Allies stay attached for this fight only, then go to their owner’s
   discard when combat resolves (`play:resolve` or `play:decline-defend`).
+
+## Step 9 — Combat spells
+
+While a battlefield is open, either fighter may **cast** a Wizard Spell
+(`typeId` 19) or Cleric Spell (`typeId` 4) from **hand** onto their
+champion (`play:cast`). The server looks up the spell and the champion’s
+`usesCodes` from the card catalog.
+
+- Same attach window as allies: attacker immediately; defender only after
+  `play:defend`.
+- Rejected if the champion cannot use that spell type (e.g. Azoun cannot
+  cast wizard spells; Maligor can).
+- Combat total = champion bonus + ally bonuses + spell bonuses.
+- Spells stay attached for this fight only, then go to discard on resolve.
 
 ## Tech stack
 
@@ -165,4 +180,5 @@ React Router · MiniSearch · TanStack Query · Fastify · Prisma · Supabase Au
 6. **Rules engine first slice (turn, zones, realm attack)** ✅
 7. **Battlefield defense (champion vs champion)** ✅
 8. **Battlefield allies (hand allies add to combat totals)** ✅
-9. Spells, items, formation A–F, holdings, spoils — later.
+9. **Combat spells (wizard/cleric, champion must be able to cast)** ✅
+10. Magical items, formation A–F, holdings, spoils — later.

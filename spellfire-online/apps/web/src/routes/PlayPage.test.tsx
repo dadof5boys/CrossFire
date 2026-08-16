@@ -29,6 +29,7 @@ vi.mock('../realtime/RealtimeProvider.js', () => ({
     defend: vi.fn(),
     declineDefend: vi.fn(),
     ally: vi.fn(),
+    cast: vi.fn(),
     resolveCombat: vi.fn(),
     syncPlay,
     joinTable,
@@ -39,9 +40,28 @@ vi.mock('../data/DatasetProvider.js', () => ({
   useDataset: () => ({
     cardById: new Map([
       ['1st/1', { id: '1st/1', title: 'Waterdeep', typeId: 13, bonus: null }],
-      ['1st/42', { id: '1st/42', title: 'King Azoun IV', typeId: 7, bonus: 7 }],
-      ['1st/43', { id: '1st/43', title: 'Maligor the Red', typeId: 20, bonus: 3 }],
+      [
+        '1st/42',
+        {
+          id: '1st/42',
+          title: 'King Azoun IV',
+          typeId: 7,
+          bonus: 7,
+          usesCodes: ['1', '2', 'd9', 'o9', 'd18', 'o18'],
+        },
+      ],
+      [
+        '1st/43',
+        {
+          id: '1st/43',
+          title: 'Maligor the Red',
+          typeId: 20,
+          bonus: 3,
+          usesCodes: ['1', '2', 'd9', 'o9', 'd19', 'o19'],
+        },
+      ],
       ['1st/54', { id: '1st/54', title: 'War Party', typeId: 1, bonus: 4 }],
+      ['1st/96', { id: '1st/96', title: 'Horrors of the Abyss', typeId: 19, bonus: 5 }],
     ]),
   }),
 }));
@@ -158,6 +178,8 @@ describe('PlayPage', () => {
         defenderCardId: null,
         attackerAllies: [],
         defenderAllies: [],
+        attackerSpells: [],
+        defenderSpells: [],
         attackerTotal: 3,
         defenderTotal: 0,
       },
@@ -197,6 +219,8 @@ describe('PlayPage', () => {
         defenderCardId: '1st/42',
         attackerAllies: [],
         defenderAllies: [],
+        attackerSpells: [],
+        defenderSpells: [],
         attackerTotal: 3,
         defenderTotal: 7,
       },
@@ -223,6 +247,50 @@ describe('PlayPage', () => {
     );
     expect(screen.getByTestId('combat-totals')).toHaveTextContent('Totals 3 vs 7');
     expect(screen.getByRole('button', { name: /add ally/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /resolve combat/i })).toBeInTheDocument();
+  });
+
+  it('shows cast-spell when the champion can use a spell in hand', () => {
+    usePlayStore.getState().applyState({
+      ...playing,
+      youSeat: 0,
+      activeSeat: 0,
+      battlefield: {
+        attackerInstanceId: 'p1',
+        attackerCardId: '1st/43',
+        targetInstanceId: 'r1',
+        targetCardId: '1st/1',
+        defenderInstanceId: 'd1',
+        defenderCardId: '1st/42',
+        attackerAllies: [],
+        defenderAllies: [],
+        attackerSpells: [],
+        defenderSpells: [],
+        attackerTotal: 3,
+        defenderTotal: 7,
+      },
+      seats: [
+        {
+          ...playing.seats[0],
+          hand: [{ instanceId: 'spl1', cardId: '1st/96' }],
+          pool: [{ instanceId: 'p1', cardId: '1st/43' }],
+        },
+        {
+          ...playing.seats[1],
+          occupant: { userId: 'b', email: 'b@example.com' },
+          pool: [{ instanceId: 'd1', cardId: '1st/42' }],
+          realms: [{ instanceId: 'r1', cardId: '1st/1' }],
+        },
+      ],
+    });
+    render(
+      <MemoryRouter initialEntries={['/play/t1']}>
+        <Routes>
+          <Route path="/play/:tableId" element={<PlayPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('button', { name: /cast spell/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /resolve combat/i })).toBeInTheDocument();
   });
 });

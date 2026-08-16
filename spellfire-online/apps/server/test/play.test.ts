@@ -287,6 +287,71 @@ describe('PlayTable', () => {
     expect(game.seats[0].pool).toHaveLength(1);
   });
 
+  it('lets a wizard cast a hand spell and adds it to the combat total', () => {
+    const game = startedDuel();
+    const attacker = { instanceId: 'atk', cardId: '1st/43' };
+    const defender = { instanceId: 'defc', cardId: '1st/42' };
+    const realm = { instanceId: 'def', cardId: '1st/1' };
+    const horrors = { instanceId: 'spl1', cardId: '1st/96' };
+    game.seats[0].pool = [attacker];
+    game.seats[0].hand = [horrors];
+    game.seats[1].pool = [defender];
+    game.seats[1].realms = [realm];
+    game.seats[1].hand = [{ instanceId: 'spl2', cardId: '1st/96' }];
+
+    expect(game.cast('a', 'spl1')).toBe('No attack to join');
+    expect(game.attack('a', 'atk', 'def')).toBeNull();
+    expect(game.cast('a', 'missing')).toBe('Spell must be in your hand');
+    expect(game.cast('b', 'spl2')).toBe('Defend with a champion first');
+    expect(game.cast('a', 'atk')).toBe('Spell must be in your hand');
+
+    const allyInHand = { instanceId: 'notspell', cardId: '1st/54' };
+    game.seats[0].hand.push(allyInHand);
+    expect(game.cast('a', 'notspell')).toBe('Only spells can be cast');
+
+    expect(game.cast('a', 'spl1')).toBeNull();
+    const opened = game.viewFor('a', []).battlefield;
+    expect(opened?.attackerSpells.map((c) => c.instanceId)).toEqual(['spl1']);
+    expect(opened?.attackerTotal).toBe(8);
+    expect(opened?.defenderTotal).toBe(0);
+
+    expect(game.defend('b', 'defc')).toBeNull();
+    expect(game.cast('b', 'spl2')).toBe('Champion cannot cast that spell');
+    expect(game.viewFor('a', []).battlefield).toMatchObject({
+      attackerTotal: 8,
+      defenderTotal: 7,
+    });
+    expect(game.resolveCombat('a')).toBeNull();
+    expect(game.lastCombat).toMatchObject({
+      attackerBonus: 8,
+      defenderBonus: 7,
+      razed: true,
+      attackerDiscarded: false,
+    });
+    expect(game.seats[0].discard.map((c) => c.instanceId)).toEqual(['spl1']);
+    expect(game.seats[0].pool).toHaveLength(1);
+    expect(game.razed.has('def')).toBe(true);
+  });
+
+  it('counts attacker spells when the defender declines', () => {
+    const game = startedDuel();
+    const attacker = { instanceId: 'atk', cardId: '1st/43' };
+    const realm = { instanceId: 'def', cardId: '1st/1' };
+    const horrors = { instanceId: 'spl1', cardId: '1st/96' };
+    game.seats[0].pool = [attacker];
+    game.seats[0].hand = [horrors];
+    game.seats[1].realms = [realm];
+    expect(game.attack('a', 'atk', 'def')).toBeNull();
+    expect(game.cast('a', 'spl1')).toBeNull();
+    expect(game.declineDefend('b')).toBeNull();
+    expect(game.lastCombat).toMatchObject({
+      attackerBonus: 8,
+      defenderBonus: 0,
+      razed: true,
+    });
+    expect(game.seats[0].discard.map((c) => c.instanceId)).toEqual(['spl1']);
+  });
+
   it('rejects an attack in the end phase', () => {
     const game = startedDuel();
     const champ = { instanceId: 'atk', cardId: '1st/43' };

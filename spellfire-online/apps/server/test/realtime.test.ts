@@ -34,6 +34,15 @@ const app = buildApp({
         ],
       };
     }
+    if (deckId === 'deck-e') {
+      return {
+        name: 'E Deck',
+        cards: [
+          { cardId: '1st/43', qty: 4 },
+          { cardId: '1st/96', qty: 4 },
+        ],
+      };
+    }
     return null;
   },
 });
@@ -86,6 +95,8 @@ type PlayState = {
     targetInstanceId: string;
     attackerAllies?: { instanceId: string; cardId: string }[];
     defenderAllies?: { instanceId: string; cardId: string }[];
+    attackerSpells?: { instanceId: string; cardId: string }[];
+    defenderSpells?: { instanceId: string; cardId: string }[];
     attackerTotal?: number;
     defenderTotal?: number;
   } | null;
@@ -405,6 +416,71 @@ describe('realtime socket', () => {
       defenderBonus: 7,
       razed: false,
       attackerDiscarded: true,
+    });
+    expect(after.battlefield).toBeNull();
+
+    a.close();
+    b.close();
+  });
+
+  it('adds a wizard spell to the attacker total before resolve', async () => {
+    const a = await connect('user-s1', 's1@example.com');
+    const b = await connect('user-s2', 's2@example.com');
+    const table = await emitAck<{ id: string }>(a, 'table:create', { name: 'Spell Test' });
+    const tableId = table?.id;
+    expect(tableId).toBeTruthy();
+
+    await emitAck(b, 'table:join', { tableId });
+    await emitAck(b, 'play:sit', { tableId });
+    await emitAck(a, 'play:load-deck', { tableId, deckId: 'deck-e' });
+    await emitAck(b, 'play:load-deck', { tableId, deckId: 'deck-c' });
+
+    const started = waitForState(
+      a,
+      (v) => v.status === 'playing' && Array.isArray(v.seats[0].hand),
+    );
+    await emitAck(a, 'play:start', { tableId });
+    const viewA = await started;
+    const aHand = viewA.seats[0].hand as { instanceId: string; cardId: string }[];
+    const champ = aHand.find((c) => c.cardId === '1st/43');
+    const spell = aHand.find((c) => c.cardId === '1st/96');
+    expect(champ && spell).toBeTruthy();
+    await emitAck(a, 'play:move', { tableId, instanceId: champ?.instanceId, toZone: 'pool' });
+    await emitAck(a, 'play:pass-turn', { tableId });
+
+    const bobReady = waitForState(
+      b,
+      (v) => v.status === 'playing' && Array.isArray(v.seats[1].hand),
+    );
+    await emitAck(b, 'play:sync', { tableId });
+    const viewB = await bobReady;
+    const bobHand = viewB.seats[1].hand as { instanceId: string; cardId: string }[];
+    const realm = bobHand.find((c) => c.cardId === '1st/1');
+    const defender = bobHand.find((c) => c.cardId === '1st/42');
+    expect(realm && defender).toBeTruthy();
+    await emitAck(b, 'play:move', { tableId, instanceId: realm?.instanceId, toZone: 'realms' });
+    await emitAck(b, 'play:move', { tableId, instanceId: defender?.instanceId, toZone: 'pool' });
+    await emitAck(b, 'play:pass-turn', { tableId });
+
+    await emitAck(a, 'play:attack', {
+      tableId,
+      attackerInstanceId: champ?.instanceId,
+      targetInstanceId: realm?.instanceId,
+    });
+    const casted = waitForState(a, (v) => (v.battlefield?.attackerSpells?.length ?? 0) > 0);
+    await emitAck(a, 'play:cast', { tableId, instanceId: spell?.instanceId });
+    const mid = await casted;
+    expect(mid.battlefield).toMatchObject({ attackerTotal: 8, defenderTotal: 0 });
+
+    await emitAck(b, 'play:defend', { tableId, defenderInstanceId: defender?.instanceId });
+    const resolved = waitForState(a, (v) => v.lastCombat?.razed === true);
+    await emitAck(a, 'play:resolve', { tableId });
+    const after = await resolved;
+    expect(after.lastCombat).toMatchObject({
+      attackerBonus: 8,
+      defenderBonus: 7,
+      razed: true,
+      attackerDiscarded: false,
     });
     expect(after.battlefield).toBeNull();
 

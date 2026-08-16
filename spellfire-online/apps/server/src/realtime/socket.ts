@@ -9,6 +9,7 @@ import {
   type DeckEntry,
   PlayAllyPayloadSchema,
   PlayAttackPayloadSchema,
+  PlayCastPayloadSchema,
   PlayDeclineDefendPayloadSchema,
   PlayDefendPayloadSchema,
   PlayLoadDeckPayloadSchema,
@@ -504,6 +505,27 @@ export function attachRealtime(
         return;
       }
       const err = game.ally(me().userId, parsed.data.instanceId);
+      if (err) {
+        ack?.(err);
+        return;
+      }
+      emitPlay(parsed.data.tableId);
+      ack?.(null);
+    });
+
+    socket.on('play:cast', (raw, ack?: (err: string | null) => void) => {
+      const parsed = PlayCastPayloadSchema.safeParse(raw);
+      if (!parsed.success) {
+        ack?.('Invalid cast');
+        return;
+      }
+      if (!atTable(parsed.data.tableId, ack)) return;
+      const game = hub.getPlay(parsed.data.tableId);
+      if (!game) {
+        ack?.('Table not found');
+        return;
+      }
+      const err = game.cast(me().userId, parsed.data.instanceId);
       if (err) {
         ack?.(err);
         return;
