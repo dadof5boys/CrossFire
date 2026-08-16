@@ -15,10 +15,12 @@ import {
   STARTING_HAND_SIZE,
   type SeatView,
   canMoveToZone,
+  championCanUse,
   combatTotal,
   expandDeck,
   isAllyType,
   isChampionType,
+  isSpellType,
   resolveChampionCombat,
   resolveRealmAttack,
 } from '@spellfire/shared';
@@ -266,10 +268,10 @@ export class PlayTable {
     if (!realm) return 'Target realm is gone';
 
     const outcome = resolveChampionCombat(
-      this.sideTotal(attackerFacts.bonus, bf.attackerAllies),
-      this.sideTotal(defenderFacts.bonus, bf.defenderAllies),
+      this.sideTotal(attackerFacts.bonus, bf.attackerAllies, bf.attackerSpells),
+      this.sideTotal(defenderFacts.bonus, bf.defenderAllies, bf.defenderSpells),
     );
-    this.discardAllies();
+    this.discardAttachments();
     if (outcome.attackerWins) {
       this.razed.add(realm.instanceId);
       this.lastCombat = {
@@ -318,10 +320,10 @@ export class PlayTable {
     if (!realmFacts) return 'Unknown card';
 
     const outcome = resolveRealmAttack(
-      this.sideTotal(attackerFacts.bonus, bf.attackerAllies),
+      this.sideTotal(attackerFacts.bonus, bf.attackerAllies, bf.attackerSpells),
       realmFacts.bonus,
     );
-    this.discardAllies();
+    this.discardAttachments();
     this.lastCombat = {
       attackerInstanceId: attacker.instanceId,
       targetInstanceId: realm.instanceId,
@@ -360,6 +362,41 @@ export class PlayTable {
     seat.hand.splice(handIdx, 1);
     if (isAttacker) bf.attackerAllies.push(card);
     else bf.defenderAllies.push(card);
+    return null;
+  }
+
+  cast(userId: string, instanceId: string): string | null {
+    if (this.status !== 'playing') return 'Game has not started';
+    const bf = this.battlefield;
+    if (!bf) return 'No attack to join';
+    const seatIndex = this.seats.findIndex((s) => s.occupant?.userId === userId);
+    if (seatIndex < 0) return 'Not seated';
+    const isAttacker = seatIndex === this.activeSeat;
+    const isDefender = seatIndex === this.defendingSeat();
+    if (!isAttacker && !isDefender) return 'Not in this fight';
+    if (isDefender && !bf.defenderInstanceId) return 'Defend with a champion first';
+
+    const seat = this.seats[seatIndex];
+    if (!seat) return 'Not seated';
+    const handIdx = seat.hand.findIndex((c) => c.instanceId === instanceId);
+    if (handIdx < 0) return 'Spell must be in your hand';
+    const card = seat.hand[handIdx];
+    if (!card) return 'Spell must be in your hand';
+    const spellFacts = this.lookup(card.cardId);
+    if (!spellFacts) return 'Unknown card';
+    if (!isSpellType(spellFacts.typeId)) return 'Only spells can be cast';
+
+    const championId = isAttacker ? bf.attackerCardId : bf.defenderCardId;
+    if (!championId) return 'Defend with a champion first';
+    const championFacts = this.lookup(championId);
+    if (!championFacts) return 'Unknown card';
+    if (!championCanUse(championFacts.usesCodes, spellFacts.typeId)) {
+      return 'Champion cannot cast that spell';
+    }
+
+    seat.hand.splice(handIdx, 1);
+    if (isAttacker) bf.attackerSpells.push(card);
+    else bf.defenderSpells.push(card);
     return null;
   }
 
@@ -457,6 +494,8 @@ export class PlayTable {
       defenderCardId: null,
       attackerAllies: [],
       defenderAllies: [],
+      attackerSpells: [],
+      defenderSpells: [],
       attackerTotal: 0,
       defenderTotal: 0,
     };
@@ -479,27 +518,39 @@ export class PlayTable {
     }
     return {
       ...bf,
-      attackerTotal: this.sideTotal(attackerBonus, bf.attackerAllies),
-      defenderTotal: this.sideTotal(defenderBonus, bf.defenderInstanceId ? bf.defenderAllies : []),
+      attackerTotal: this.sideTotal(attackerBonus, bf.attackerAllies, bf.attackerSpells),
+      defenderTotal: this.sideTotal(
+        defenderBonus,
+        bf.defenderInstanceId ? bf.defenderAllies : [],
+        bf.defenderInstanceId ? bf.defenderSpells : [],
+      ),
     };
   }
 
-  private sideTotal(championBonus: number | null | undefined, allies: CardInstance[]): number {
-    return combatTotal(
-      championBonus,
-      allies.map((card) => this.lookup(card.cardId)?.bonus),
-    );
+  private sideTotal(
+    championBonus: number | null | undefined,
+    allies: CardInstance[],
+    spells: CardInstance[],
+  ): number {
+    return combatTotal(championBonus, [
+      ...allies.map((card) => this.lookup(card.cardId)?.bonus),
+      ...spells.map((card) => this.lookup(card.cardId)?.bonus),
+    ]);
   }
 
-  private discardAllies(): void {
+  private discardAttachments(): void {
     const bf = this.battlefield;
     if (!bf) return;
     const attackerSeat = this.seats[this.activeSeat];
     const foe = this.seats[this.defendingSeat()];
-    if (attackerSeat) attackerSeat.discard.push(...bf.attackerAllies);
-    if (foe) foe.discard.push(...bf.defenderAllies);
+    if (attackerSeat) {
+      attackerSeat.discard.push(...bf.attackerAllies, ...bf.attackerSpells);
+    }
+    if (foe) foe.discard.push(...bf.defenderAllies, ...bf.defenderSpells);
     bf.attackerAllies = [];
     bf.defenderAllies = [];
+    bf.attackerSpells = [];
+    bf.defenderSpells = [];
   }
 
   private requireActive(userId: string): string | null {

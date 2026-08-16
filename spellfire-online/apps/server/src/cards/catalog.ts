@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 export interface CardFacts {
   typeId: number;
   bonus: number | null;
+  usesCodes?: string[];
 }
 
 export type CardLookup = (cardId: string) => CardFacts | undefined;
@@ -29,12 +30,17 @@ function findCardsJson(): string {
 export function loadCatalog(): Map<string, CardFacts> {
   if (cache) return cache;
   const raw = JSON.parse(readFileSync(findCardsJson(), 'utf8')) as {
-    cards?: { id: string; typeId: number; bonus: number | null }[];
+    cards?: { id: string; typeId: number; bonus: number | null; usesCodes?: string[] }[];
   };
   if (!Array.isArray(raw.cards)) {
     throw new Error('cards.json is missing a cards array');
   }
-  cache = new Map(raw.cards.map((c) => [c.id, { typeId: c.typeId, bonus: c.bonus }]));
+  cache = new Map(
+    raw.cards.map((c) => [
+      c.id,
+      { typeId: c.typeId, bonus: c.bonus, usesCodes: c.usesCodes ?? [] },
+    ]),
+  );
   return cache;
 }
 

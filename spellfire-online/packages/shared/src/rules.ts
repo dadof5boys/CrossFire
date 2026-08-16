@@ -6,6 +6,8 @@ export type ChampionTypeId = (typeof CHAMPION_TYPE_IDS)[number];
 
 export const REALM_TYPE_ID = 13;
 export const ALLY_TYPE_ID = 1;
+export const CLERIC_SPELL_TYPE_ID = 4;
+export const WIZARD_SPELL_TYPE_ID = 19;
 
 /** Informal CrossFire phase radios: 0 start, 1–3 build, 4 combat, 5 end. */
 export const COMBAT_PHASE = 4;
@@ -19,6 +21,17 @@ export function isChampionType(typeId: number): boolean {
 
 export function isAllyType(typeId: number): boolean {
   return typeId === ALLY_TYPE_ID;
+}
+
+export function isSpellType(typeId: number): boolean {
+  return typeId === CLERIC_SPELL_TYPE_ID || typeId === WIZARD_SPELL_TYPE_ID;
+}
+
+/** Champion `usesCodes` are `typeId`, `d<typeId>`, or `o<typeId>`. */
+export function championCanUse(usesCodes: readonly string[] | undefined, typeId: number): boolean {
+  if (!usesCodes || usesCodes.length === 0) return false;
+  const id = String(typeId);
+  return usesCodes.some((code) => code === id || code === `d${id}` || code === `o${id}`);
 }
 
 export function numericBonus(bonus: number | null | undefined): number {
@@ -60,13 +73,13 @@ export function resolveChampionCombat(
   return { attackerWins: atk > def, attackerBonus: atk, defenderBonus: def };
 }
 
-/** Champion bonus plus attached ally bonuses for one side of a fight. */
+/** Champion bonus plus attached ally/spell bonuses for one side of a fight. */
 export function combatTotal(
   championBonus: number | null | undefined,
-  allyBonuses: Array<number | null | undefined> = [],
+  attachedBonuses: Array<number | null | undefined> = [],
 ): number {
   let total = numericBonus(championBonus);
-  for (const bonus of allyBonuses) {
+  for (const bonus of attachedBonuses) {
     total += numericBonus(bonus);
   }
   return total;

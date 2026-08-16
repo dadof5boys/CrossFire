@@ -33,6 +33,7 @@ export interface RealtimeApi {
   defend: (tableId: string, defenderInstanceId: string) => void;
   declineDefend: (tableId: string) => void;
   ally: (tableId: string, instanceId: string) => void;
+  cast: (tableId: string, instanceId: string) => void;
   resolveCombat: (tableId: string) => void;
   syncPlay: (tableId: string) => void;
 }
@@ -57,6 +58,7 @@ const noopApi: RealtimeApi = {
   defend: () => {},
   declineDefend: () => {},
   ally: () => {},
+  cast: () => {},
   resolveCombat: () => {},
   syncPlay: () => {},
 };
@@ -167,6 +169,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       defend: (tableId, defenderInstanceId) => emit('play:defend', { tableId, defenderInstanceId }),
       declineDefend: (tableId) => emit('play:decline-defend', { tableId }),
       ally: (tableId, instanceId) => emit('play:ally', { tableId, instanceId }),
+      cast: (tableId, instanceId) => emit('play:cast', { tableId, instanceId }),
       resolveCombat: (tableId) => emit('play:resolve', { tableId }),
       syncPlay: (tableId) => emit('play:sync', { tableId }),
     };

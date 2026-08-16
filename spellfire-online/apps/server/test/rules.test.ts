@@ -1,10 +1,13 @@
 import {
   ALLY_TYPE_ID,
   REALM_TYPE_ID,
+  WIZARD_SPELL_TYPE_ID,
   canMoveToZone,
+  championCanUse,
   combatTotal,
   isAllyType,
   isChampionType,
+  isSpellType,
   resolveChampionCombat,
   resolveRealmAttack,
 } from '@spellfire/shared';
@@ -20,6 +23,10 @@ describe('shared rules helpers', () => {
     expect(getCardFacts('1st/54')?.typeId).toBe(ALLY_TYPE_ID);
     expect(isAllyType(1)).toBe(true);
     expect(isAllyType(20)).toBe(false);
+    expect(getCardFacts('1st/96')?.typeId).toBe(WIZARD_SPELL_TYPE_ID);
+    expect(isSpellType(19)).toBe(true);
+    expect(isSpellType(4)).toBe(true);
+    expect(isSpellType(1)).toBe(false);
   });
 
   it('allows realms only in realms, champions only in pool', () => {
@@ -68,5 +75,15 @@ describe('shared rules helpers', () => {
     expect(combatTotal(3, [4, 4])).toBe(11);
     expect(combatTotal(null, [4])).toBe(4);
     expect(combatTotal(7, [])).toBe(7);
+    expect(combatTotal(3, [4, 5])).toBe(12);
+  });
+
+  it('lets Maligor cast wizard spells but not Azoun', () => {
+    const maligor = getCardFacts('1st/43');
+    const azoun = getCardFacts('1st/42');
+    expect(championCanUse(maligor?.usesCodes, WIZARD_SPELL_TYPE_ID)).toBe(true);
+    expect(championCanUse(azoun?.usesCodes, WIZARD_SPELL_TYPE_ID)).toBe(false);
+    expect(championCanUse(maligor?.usesCodes, ALLY_TYPE_ID)).toBe(true);
+    expect(championCanUse([], 19)).toBe(false);
   });
 });

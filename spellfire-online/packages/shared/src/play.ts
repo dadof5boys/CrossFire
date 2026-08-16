@@ -51,6 +51,8 @@ export const BattlefieldSchema = z.object({
   defenderCardId: z.string().nullable(),
   attackerAllies: z.array(CardInstanceSchema),
   defenderAllies: z.array(CardInstanceSchema),
+  attackerSpells: z.array(CardInstanceSchema),
+  defenderSpells: z.array(CardInstanceSchema),
   attackerTotal: z.number(),
   defenderTotal: z.number(),
 });
@@ -116,4 +118,8 @@ export const PlayAllyPayloadSchema = z.object({
 });
 export const PlayResolvePayloadSchema = z.object({
   tableId: z.string().min(1),
+});
+export const PlayCastPayloadSchema = z.object({
+  tableId: z.string().min(1),
+  instanceId: z.string().min(1),
 });
