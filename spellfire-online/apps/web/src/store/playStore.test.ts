@@ -34,6 +34,7 @@ const view: PlayView = {
   ],
   spectators: [],
   lastCombat: null,
+  battlefield: null,
 };
 
 describe('playStore', () => {

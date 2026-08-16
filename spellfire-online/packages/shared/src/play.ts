@@ -34,11 +34,23 @@ export type PlayPhase = z.infer<typeof PlayPhaseSchema>;
 export const CombatResultSchema = z.object({
   attackerInstanceId: z.string(),
   targetInstanceId: z.string(),
+  defenderInstanceId: z.string().nullable(),
   attackerBonus: z.number(),
   defenderBonus: z.number(),
   razed: z.boolean(),
+  attackerDiscarded: z.boolean(),
 });
 export type CombatResult = z.infer<typeof CombatResultSchema>;
+
+export const BattlefieldSchema = z.object({
+  attackerInstanceId: z.string(),
+  attackerCardId: z.string(),
+  targetInstanceId: z.string(),
+  targetCardId: z.string(),
+  defenderInstanceId: z.string().nullable(),
+  defenderCardId: z.string().nullable(),
+});
+export type Battlefield = z.infer<typeof BattlefieldSchema>;
 
 export const SeatViewSchema = z.object({
   occupant: OccupantSchema.nullable(),
@@ -63,6 +75,7 @@ export const PlayViewSchema = z.object({
   seats: z.tuple([SeatViewSchema, SeatViewSchema]),
   spectators: z.array(OccupantSchema),
   lastCombat: CombatResultSchema.nullable(),
+  battlefield: BattlefieldSchema.nullable(),
 });
 export type PlayView = z.infer<typeof PlayViewSchema>;
 
@@ -85,4 +98,11 @@ export const PlayAttackPayloadSchema = z.object({
 export const PlaySetPhasePayloadSchema = z.object({
   tableId: z.string().min(1),
   phase: PlayPhaseSchema,
+});
+export const PlayDefendPayloadSchema = z.object({
+  tableId: z.string().min(1),
+  defenderInstanceId: z.string().min(1),
+});
+export const PlayDeclineDefendPayloadSchema = z.object({
+  tableId: z.string().min(1),
 });

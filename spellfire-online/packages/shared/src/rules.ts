@@ -44,3 +44,13 @@ export function resolveRealmAttack(
   const def = numericBonus(defenderBonus);
   return { razed: atk > def, attackerBonus: atk, defenderBonus: def };
 }
+
+/** Champion vs champion. Attacker must be strictly greater to win. */
+export function resolveChampionCombat(
+  attackerBonus: number | null,
+  defenderBonus: number | null,
+): { attackerWins: boolean; attackerBonus: number; defenderBonus: number } {
+  const atk = numericBonus(attackerBonus);
+  const def = numericBonus(defenderBonus);
+  return { attackerWins: atk > def, attackerBonus: atk, defenderBonus: def };
+}

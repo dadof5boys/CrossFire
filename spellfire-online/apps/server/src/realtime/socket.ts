@@ -8,6 +8,8 @@ import {
   DEFAULT_CHAT_CHANNEL,
   type DeckEntry,
   PlayAttackPayloadSchema,
+  PlayDeclineDefendPayloadSchema,
+  PlayDefendPayloadSchema,
   PlayLoadDeckPayloadSchema,
   PlayMovePayloadSchema,
   PlaySetPhasePayloadSchema,
@@ -416,6 +418,48 @@ export function attachRealtime(
         parsed.data.attackerInstanceId,
         parsed.data.targetInstanceId,
       );
+      if (err) {
+        ack?.(err);
+        return;
+      }
+      emitPlay(parsed.data.tableId);
+      ack?.(null);
+    });
+
+    socket.on('play:defend', (raw, ack?: (err: string | null) => void) => {
+      const parsed = PlayDefendPayloadSchema.safeParse(raw);
+      if (!parsed.success) {
+        ack?.('Invalid defend');
+        return;
+      }
+      if (!atTable(parsed.data.tableId, ack)) return;
+      const game = hub.getPlay(parsed.data.tableId);
+      if (!game) {
+        ack?.('Table not found');
+        return;
+      }
+      const err = game.defend(me().userId, parsed.data.defenderInstanceId);
+      if (err) {
+        ack?.(err);
+        return;
+      }
+      emitPlay(parsed.data.tableId);
+      ack?.(null);
+    });
+
+    socket.on('play:decline-defend', (raw, ack?: (err: string | null) => void) => {
+      const parsed = PlayDeclineDefendPayloadSchema.safeParse(raw);
+      if (!parsed.success) {
+        ack?.('Invalid decline');
+        return;
+      }
+      if (!atTable(parsed.data.tableId, ack)) return;
+      const game = hub.getPlay(parsed.data.tableId);
+      if (!game) {
+        ack?.('Table not found');
+        return;
+      }
+      const err = game.declineDefend(me().userId);
       if (err) {
         ack?.(err);
         return;

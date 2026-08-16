@@ -127,6 +127,9 @@ export default function PlayPage() {
   const foeSeat = youSeat === 0 ? 1 : youSeat === 1 ? 0 : 1;
   const foe = view?.seats[foeSeat];
   const myTurn = view?.status === 'playing' && youSeat !== null && view.activeSeat === youSeat;
+  const inCombat = Boolean(view?.battlefield);
+  const isDefender = Boolean(view?.battlefield) && youSeat !== null && youSeat !== view?.activeSeat;
+  const canAct = myTurn && !inCombat;
   const heldCard = you && held ? findInstance(you, held) : undefined;
   const heldTypeId = heldCard ? cardById.get(heldCard.cardId)?.typeId : undefined;
   const heldInPool = Boolean(held && you?.pool.some((c) => c.instanceId === held));
@@ -135,7 +138,9 @@ export default function PlayPage() {
     target && foe && !foe.razedInstanceIds.includes(target)
       ? target
       : (foe?.realms.find((c) => !foe.razedInstanceIds.includes(c.instanceId))?.instanceId ?? null);
-  const canAttack = Boolean(myTurn && attackAttackerId && attackTargetId);
+  const canAttack = Boolean(canAct && attackAttackerId && attackTargetId);
+  const defendId = heldInPool ? held : (you?.pool[0]?.instanceId ?? null);
+  const canDefend = Boolean(isDefender && defendId);
 
   const onDragEnd = (event: DragEndEvent) => {
     const instanceId = event.active.data.current?.instanceId as string | undefined;
@@ -214,7 +219,7 @@ export default function PlayPage() {
               <button
                 key={label}
                 type="button"
-                disabled={!myTurn}
+                disabled={!canAct}
                 aria-pressed={view.phase === i}
                 onClick={() => rt.setPhase(tableId, i as PlayPhase)}
                 className={`rounded px-2 py-1 text-xs ${
@@ -229,10 +234,58 @@ export default function PlayPage() {
           </fieldset>
         ) : null}
 
+        {view?.battlefield ? (
+          <section
+            className="rounded-lg border border-amber-800 bg-amber-950/40 p-3"
+            data-testid="battlefield"
+          >
+            <p className="text-sm font-semibold text-amber-200">Battlefield</p>
+            <p className="text-sm text-slate-300">
+              {cardById.get(view.battlefield.attackerCardId)?.title ??
+                view.battlefield.attackerCardId}{' '}
+              attacks{' '}
+              {cardById.get(view.battlefield.targetCardId)?.title ?? view.battlefield.targetCardId}
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              {isDefender
+                ? 'Choose a pool champion to defend, or decline and let the realm stand alone.'
+                : 'Waiting for the defender to send a champion or decline.'}
+            </p>
+            {isDefender ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {canDefend ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (defendId) rt.defend(tableId, defendId);
+                    }}
+                    className="rounded bg-sky-700 px-3 py-1 text-sm font-semibold hover:bg-sky-600"
+                  >
+                    Defend with champion
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => rt.declineDefend(tableId)}
+                  className="rounded bg-slate-700 px-3 py-1 text-sm hover:bg-slate-600"
+                >
+                  Decline defense
+                </button>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
         {view?.lastCombat ? (
           <p className="text-sm text-slate-300" data-testid="last-combat">
             Combat: {view.lastCombat.attackerBonus} vs {view.lastCombat.defenderBonus}
-            {view.lastCombat.razed ? ' — realm razed' : ' — realm holds'}
+            {view.lastCombat.defenderInstanceId
+              ? view.lastCombat.razed
+                ? ' — attacker wins, realm razed'
+                : ' — defender holds, attacker discarded'
+              : view.lastCombat.razed
+                ? ' — realm razed'
+                : ' — realm holds'}
           </p>
         ) : null}
 
@@ -262,7 +315,7 @@ export default function PlayPage() {
                     selected={target === instance.instanceId}
                     razed={foe.razedInstanceIds.includes(instance.instanceId)}
                     onPick={
-                      myTurn
+                      canAct
                         ? (id) => {
                             setTarget(id);
                           }
@@ -296,28 +349,31 @@ export default function PlayPage() {
                   id="zone:realms"
                   label="Realms"
                   accept={
-                    myTurn &&
+                    canAct &&
                     (heldTypeId === undefined || canMoveToZone(heldTypeId, 'realms') === null)
                   }
                 >
                   {renderCards(you.realms, {
-                    draggable: myTurn,
+                    draggable: canAct,
                     razedIds: you.razedInstanceIds,
-                    pickable: myTurn,
+                    pickable: canAct,
                   })}
                 </Zone>
                 <Zone
                   id="zone:pool"
                   label="Pool / champions"
                   accept={
-                    myTurn &&
+                    canAct &&
                     (heldTypeId === undefined || canMoveToZone(heldTypeId, 'pool') === null)
                   }
                 >
-                  {renderCards(you.pool, { draggable: myTurn, pickable: myTurn })}
+                  {renderCards(you.pool, {
+                    draggable: canAct,
+                    pickable: canAct || isDefender,
+                  })}
                 </Zone>
-                <Zone id="zone:discard" label="Discard" accept={myTurn}>
-                  {renderCards(you.discard, { draggable: myTurn, pickable: myTurn })}
+                <Zone id="zone:discard" label="Discard" accept={canAct}>
+                  {renderCards(you.discard, { draggable: canAct, pickable: canAct })}
                 </Zone>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -326,7 +382,7 @@ export default function PlayPage() {
                   <>
                     <button
                       type="button"
-                      disabled={!myTurn}
+                      disabled={!canAct}
                       onClick={() => rt.draw(tableId)}
                       className="rounded bg-sky-700 px-3 py-1 text-sm font-semibold hover:bg-sky-600 disabled:opacity-40"
                     >
@@ -334,7 +390,7 @@ export default function PlayPage() {
                     </button>
                     <button
                       type="button"
-                      disabled={!myTurn}
+                      disabled={!canAct}
                       onClick={() => rt.passTurn(tableId)}
                       className="rounded bg-slate-700 px-3 py-1 text-sm hover:bg-slate-600 disabled:opacity-40"
                     >
@@ -353,7 +409,7 @@ export default function PlayPage() {
                         Attack realm
                       </button>
                     ) : null}
-                    {held && myTurn ? (
+                    {held && canAct ? (
                       <>
                         {heldTypeId === undefined || canMoveToZone(heldTypeId, 'pool') === null ? (
                           <button
@@ -427,7 +483,7 @@ export default function PlayPage() {
               </p>
               <Zone id="zone:hand" label="" accept={false}>
                 {Array.isArray(you.hand) ? (
-                  renderCards(you.hand, { draggable: myTurn, pickable: myTurn })
+                  renderCards(you.hand, { draggable: canAct, pickable: canAct })
                 ) : (
                   <FaceDownRow count={you.hand.count} />
                 )}

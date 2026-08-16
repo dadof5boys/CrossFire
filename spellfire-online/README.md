@@ -122,9 +122,13 @@ card types.
 - **Zones**: realms accept typeId 13 only; pool accepts champions
   (5, 7, 10, 12, 14, 16, 20); discard accepts any; hand is fillable only via
   Draw.
-- **Combat** (`play:attack`): a pool champion vs an opponent realm. If
-  `attacker.bonus ?? 0` is **strictly greater** than `realm.bonus ?? 0`, the
-  realm is marked **razed** (stays in formation). Attacker stays in the pool.
+- **Combat** (`play:attack`): opens a **battlefield**. The defender may
+  `play:defend` with a pool champion or `play:decline-defend`.
+  - Undefended: same as before — raze if attacker bonus is strictly greater
+    than the realm bonus.
+  - Defended: compare champion bonuses. Attacker wins → realm razed, both
+    champions stay in pool. Defender holds (tie or better) → attacker is
+    discarded, realm unrazed.
   No spoils, attachments, or formation slots yet.
 
 ## Tech stack
@@ -141,4 +145,5 @@ React Router · MiniSearch · TanStack Query · Fastify · Prisma · Supabase Au
 4. **Realtime chat + table lobby (Socket.IO)** ✅
 5. **Digital tabletop (shared board, private hands)** ✅
 6. **Rules engine first slice (turn, zones, realm attack)** ✅
-7. Holdings, formation A–F, battlefield, spoils, full legal-play — later.
+7. **Battlefield defense (champion vs champion)** ✅
+8. Allies, spells, items, formation A–F, holdings, spoils — later.

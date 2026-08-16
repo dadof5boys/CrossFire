@@ -98,12 +98,20 @@ describe('PlayTable', () => {
     expect(game.passTurn('b')).toBeNull();
 
     expect(game.attack('a', champ.instanceId, realm.instanceId)).toBeNull();
+    expect(game.viewFor('a', []).battlefield?.targetInstanceId).toBe(realm.instanceId);
+    expect(game.viewFor('a', []).lastCombat).toBeNull();
+    expect(game.draw('a')).toBe('Resolve the current attack first');
+    expect(game.declineDefend('a')).toBe('Not the defending player');
+    expect(game.declineDefend('b')).toBeNull();
     const view = game.viewFor('a', []);
     expect(view.phase).toBe(4);
+    expect(view.battlefield).toBeNull();
     expect(view.lastCombat).toMatchObject({
       attackerBonus: 3,
       defenderBonus: 0,
       razed: true,
+      attackerDiscarded: false,
+      defenderInstanceId: null,
     });
     expect(view.seats[1].razedInstanceIds).toEqual([realm.instanceId]);
     expect(view.seats[1].realms).toHaveLength(1);
@@ -127,8 +135,55 @@ describe('PlayTable', () => {
     isolated.seats[0].pool = [champ];
     isolated.seats[1].realms = [fortress];
     expect(isolated.attack('a', 'atk', 'def')).toBeNull();
+    expect(isolated.battlefield?.targetInstanceId).toBe('def');
+    expect(isolated.declineDefend('b')).toBeNull();
     expect(isolated.lastCombat?.razed).toBe(false);
     expect(isolated.razed.has('def')).toBe(false);
+  });
+
+  it('razes when a stronger champion beats the defending champion', () => {
+    const game = startedDuel();
+    const attacker = { instanceId: 'atk', cardId: '1st/42' };
+    const defender = { instanceId: 'defc', cardId: '1st/43' };
+    const realm = { instanceId: 'def', cardId: '1st/1' };
+    game.seats[0].pool = [attacker];
+    game.seats[1].pool = [defender];
+    game.seats[1].realms = [realm];
+    expect(game.attack('a', 'atk', 'def')).toBeNull();
+    expect(game.defend('b', 'defc')).toBeNull();
+    expect(game.lastCombat).toMatchObject({
+      attackerBonus: 7,
+      defenderBonus: 3,
+      razed: true,
+      attackerDiscarded: false,
+      defenderInstanceId: 'defc',
+    });
+    expect(game.razed.has('def')).toBe(true);
+    expect(game.seats[0].pool).toHaveLength(1);
+    expect(game.seats[1].pool).toHaveLength(1);
+    expect(game.battlefield).toBeNull();
+  });
+
+  it('discards the attacker when the defending champion is not weaker', () => {
+    const game = startedDuel();
+    const attacker = { instanceId: 'atk', cardId: '1st/43' };
+    const defender = { instanceId: 'defc', cardId: '1st/42' };
+    const realm = { instanceId: 'def', cardId: '1st/1' };
+    game.seats[0].pool = [attacker];
+    game.seats[1].pool = [defender];
+    game.seats[1].realms = [realm];
+    expect(game.attack('a', 'atk', 'def')).toBeNull();
+    expect(game.defend('b', 'defc')).toBeNull();
+    expect(game.lastCombat).toMatchObject({
+      attackerBonus: 3,
+      defenderBonus: 7,
+      razed: false,
+      attackerDiscarded: true,
+    });
+    expect(game.razed.has('def')).toBe(false);
+    expect(game.seats[0].pool).toHaveLength(0);
+    expect(game.seats[0].discard.map((c) => c.instanceId)).toEqual(['atk']);
+    expect(game.seats[1].pool).toHaveLength(1);
   });
 
   it('rejects an attack in the end phase', () => {

@@ -30,6 +30,8 @@ export interface RealtimeApi {
   passTurn: (tableId: string) => void;
   setPhase: (tableId: string, phase: PlayPhase) => void;
   attack: (tableId: string, attackerInstanceId: string, targetInstanceId: string) => void;
+  defend: (tableId: string, defenderInstanceId: string) => void;
+  declineDefend: (tableId: string) => void;
   syncPlay: (tableId: string) => void;
 }
 
@@ -50,6 +52,8 @@ const noopApi: RealtimeApi = {
   passTurn: () => {},
   setPhase: () => {},
   attack: () => {},
+  defend: () => {},
+  declineDefend: () => {},
   syncPlay: () => {},
 };
 
@@ -156,6 +160,8 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       setPhase: (tableId, phase) => emit('play:set-phase', { tableId, phase }),
       attack: (tableId, attackerInstanceId, targetInstanceId) =>
         emit('play:attack', { tableId, attackerInstanceId, targetInstanceId }),
+      defend: (tableId, defenderInstanceId) => emit('play:defend', { tableId, defenderInstanceId }),
+      declineDefend: (tableId) => emit('play:decline-defend', { tableId }),
       syncPlay: (tableId) => emit('play:sync', { tableId }),
     };
   }, []);
