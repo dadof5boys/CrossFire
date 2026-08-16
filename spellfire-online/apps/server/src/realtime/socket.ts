@@ -7,11 +7,13 @@ import {
   ChatTellPayloadSchema,
   DEFAULT_CHAT_CHANNEL,
   type DeckEntry,
+  PlayAllyPayloadSchema,
   PlayAttackPayloadSchema,
   PlayDeclineDefendPayloadSchema,
   PlayDefendPayloadSchema,
   PlayLoadDeckPayloadSchema,
   PlayMovePayloadSchema,
+  PlayResolvePayloadSchema,
   PlaySetPhasePayloadSchema,
   PlayTableIdPayloadSchema,
   TableCreatePayloadSchema,
@@ -460,6 +462,48 @@ export function attachRealtime(
         return;
       }
       const err = game.declineDefend(me().userId);
+      if (err) {
+        ack?.(err);
+        return;
+      }
+      emitPlay(parsed.data.tableId);
+      ack?.(null);
+    });
+
+    socket.on('play:resolve', (raw, ack?: (err: string | null) => void) => {
+      const parsed = PlayResolvePayloadSchema.safeParse(raw);
+      if (!parsed.success) {
+        ack?.('Invalid resolve');
+        return;
+      }
+      if (!atTable(parsed.data.tableId, ack)) return;
+      const game = hub.getPlay(parsed.data.tableId);
+      if (!game) {
+        ack?.('Table not found');
+        return;
+      }
+      const err = game.resolveCombat(me().userId);
+      if (err) {
+        ack?.(err);
+        return;
+      }
+      emitPlay(parsed.data.tableId);
+      ack?.(null);
+    });
+
+    socket.on('play:ally', (raw, ack?: (err: string | null) => void) => {
+      const parsed = PlayAllyPayloadSchema.safeParse(raw);
+      if (!parsed.success) {
+        ack?.('Invalid ally');
+        return;
+      }
+      if (!atTable(parsed.data.tableId, ack)) return;
+      const game = hub.getPlay(parsed.data.tableId);
+      if (!game) {
+        ack?.('Table not found');
+        return;
+      }
+      const err = game.ally(me().userId, parsed.data.instanceId);
       if (err) {
         ack?.(err);
         return;

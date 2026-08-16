@@ -14,7 +14,7 @@ import type {
   PlayZone,
   SeatView,
 } from '@spellfire/shared';
-import { PHASE_LABELS, canMoveToZone } from '@spellfire/shared';
+import { PHASE_LABELS, canMoveToZone, isAllyType } from '@spellfire/shared';
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider.js';
@@ -128,11 +128,17 @@ export default function PlayPage() {
   const foe = view?.seats[foeSeat];
   const myTurn = view?.status === 'playing' && youSeat !== null && view.activeSeat === youSeat;
   const inCombat = Boolean(view?.battlefield);
+  const isAttacker = Boolean(view?.battlefield) && youSeat !== null && youSeat === view?.activeSeat;
   const isDefender = Boolean(view?.battlefield) && youSeat !== null && youSeat !== view?.activeSeat;
+  const defenderCommitted = Boolean(view?.battlefield?.defenderInstanceId);
   const canAct = myTurn && !inCombat;
+  const canPlayAlly = Boolean(isAttacker || (isDefender && defenderCommitted));
   const heldCard = you && held ? findInstance(you, held) : undefined;
   const heldTypeId = heldCard ? cardById.get(heldCard.cardId)?.typeId : undefined;
   const heldInPool = Boolean(held && you?.pool.some((c) => c.instanceId === held));
+  const heldInHand = Boolean(
+    held && Array.isArray(you?.hand) && you.hand.some((c) => c.instanceId === held),
+  );
   const attackAttackerId = heldInPool ? held : (you?.pool[0]?.instanceId ?? null);
   const attackTargetId =
     target && foe && !foe.razedInstanceIds.includes(target)
@@ -140,7 +146,18 @@ export default function PlayPage() {
       : (foe?.realms.find((c) => !foe.razedInstanceIds.includes(c.instanceId))?.instanceId ?? null);
   const canAttack = Boolean(canAct && attackAttackerId && attackTargetId);
   const defendId = heldInPool ? held : (you?.pool[0]?.instanceId ?? null);
-  const canDefend = Boolean(isDefender && defendId);
+  const canDefend = Boolean(isDefender && !defenderCommitted && defendId);
+  const handAllies = Array.isArray(you?.hand)
+    ? you.hand.filter((c) => {
+        const typeId = cardById.get(c.cardId)?.typeId;
+        return typeId !== undefined && isAllyType(typeId);
+      })
+    : [];
+  const allyId =
+    heldInHand && heldTypeId !== undefined && isAllyType(heldTypeId)
+      ? held
+      : (handAllies[0]?.instanceId ?? null);
+  const canAddAlly = Boolean(canPlayAlly && allyId);
 
   const onDragEnd = (event: DragEndEvent) => {
     const instanceId = event.active.data.current?.instanceId as string | undefined;
@@ -245,34 +262,85 @@ export default function PlayPage() {
                 view.battlefield.attackerCardId}{' '}
               attacks{' '}
               {cardById.get(view.battlefield.targetCardId)?.title ?? view.battlefield.targetCardId}
+              {view.battlefield.defenderCardId
+                ? ` — defended by ${
+                    cardById.get(view.battlefield.defenderCardId)?.title ??
+                    view.battlefield.defenderCardId
+                  }`
+                : ''}
+            </p>
+            <p className="mt-1 text-sm font-semibold text-amber-100" data-testid="combat-totals">
+              Totals {view.battlefield.attackerTotal} vs {view.battlefield.defenderTotal}
             </p>
             <p className="mt-1 text-xs text-slate-400">
-              {isDefender
-                ? 'Choose a pool champion to defend, or decline and let the realm stand alone.'
-                : 'Waiting for the defender to send a champion or decline.'}
+              Attacker allies:{' '}
+              {view.battlefield.attackerAllies.length === 0
+                ? 'none'
+                : view.battlefield.attackerAllies
+                    .map((c) => cardById.get(c.cardId)?.title ?? c.cardId)
+                    .join(', ')}
+              {' · '}
+              Defender allies:{' '}
+              {view.battlefield.defenderAllies.length === 0
+                ? 'none'
+                : view.battlefield.defenderAllies
+                    .map((c) => cardById.get(c.cardId)?.title ?? c.cardId)
+                    .join(', ')}
             </p>
-            {isDefender ? (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {canDefend ? (
+            <p className="mt-1 text-xs text-slate-400">
+              {isDefender && !defenderCommitted
+                ? 'Choose a pool champion to defend, or decline and let the realm stand alone.'
+                : defenderCommitted
+                  ? 'Add allies from your hand, then resolve combat.'
+                  : 'Waiting for the defender to send a champion or decline. You may add allies now.'}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {isDefender && !defenderCommitted ? (
+                <>
+                  {canDefend ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (defendId) rt.defend(tableId, defendId);
+                      }}
+                      className="rounded bg-sky-700 px-3 py-1 text-sm font-semibold hover:bg-sky-600"
+                    >
+                      Defend with champion
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    onClick={() => {
-                      if (defendId) rt.defend(tableId, defendId);
-                    }}
-                    className="rounded bg-sky-700 px-3 py-1 text-sm font-semibold hover:bg-sky-600"
+                    onClick={() => rt.declineDefend(tableId)}
+                    className="rounded bg-slate-700 px-3 py-1 text-sm hover:bg-slate-600"
                   >
-                    Defend with champion
+                    Decline defense
                   </button>
-                ) : null}
+                </>
+              ) : null}
+              {canAddAlly ? (
                 <button
                   type="button"
-                  onClick={() => rt.declineDefend(tableId)}
-                  className="rounded bg-slate-700 px-3 py-1 text-sm hover:bg-slate-600"
+                  onClick={() => {
+                    if (allyId) {
+                      rt.ally(tableId, allyId);
+                      setHeld(null);
+                    }
+                  }}
+                  className="rounded bg-violet-700 px-3 py-1 text-sm font-semibold hover:bg-violet-600"
                 >
-                  Decline defense
+                  Add ally
                 </button>
-              </div>
-            ) : null}
+              ) : null}
+              {defenderCommitted && (isAttacker || isDefender) ? (
+                <button
+                  type="button"
+                  onClick={() => rt.resolveCombat(tableId)}
+                  className="rounded bg-red-700 px-3 py-1 text-sm font-semibold hover:bg-red-600"
+                >
+                  Resolve combat
+                </button>
+              ) : null}
+            </div>
           </section>
         ) : null}
 
@@ -369,7 +437,7 @@ export default function PlayPage() {
                 >
                   {renderCards(you.pool, {
                     draggable: canAct,
-                    pickable: canAct || isDefender,
+                    pickable: canAct || (isDefender && !defenderCommitted),
                   })}
                 </Zone>
                 <Zone id="zone:discard" label="Discard" accept={canAct}>
@@ -479,11 +547,11 @@ export default function PlayPage() {
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
                 Your hand {Array.isArray(you.hand) ? `(${you.hand.length})` : ''} — click a card,
                 then Play to pool / realms / discard (or drag). Select a pool champion and an
-                opponent realm to attack.
+                opponent realm to attack. During a fight, select an ally and Add ally.
               </p>
               <Zone id="zone:hand" label="" accept={false}>
                 {Array.isArray(you.hand) ? (
-                  renderCards(you.hand, { draggable: canAct, pickable: canAct })
+                  renderCards(you.hand, { draggable: canAct, pickable: canAct || canPlayAlly })
                 ) : (
                   <FaceDownRow count={you.hand.count} />
                 )}

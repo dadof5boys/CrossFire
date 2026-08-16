@@ -1,6 +1,9 @@
 import {
+  ALLY_TYPE_ID,
   REALM_TYPE_ID,
   canMoveToZone,
+  combatTotal,
+  isAllyType,
   isChampionType,
   resolveChampionCombat,
   resolveRealmAttack,
@@ -14,6 +17,9 @@ describe('shared rules helpers', () => {
     expect(getCardFacts('1st/43')?.typeId).toBe(20);
     expect(isChampionType(20)).toBe(true);
     expect(isChampionType(13)).toBe(false);
+    expect(getCardFacts('1st/54')?.typeId).toBe(ALLY_TYPE_ID);
+    expect(isAllyType(1)).toBe(true);
+    expect(isAllyType(20)).toBe(false);
   });
 
   it('allows realms only in realms, champions only in pool', () => {
@@ -55,5 +61,12 @@ describe('shared rules helpers', () => {
       defenderBonus: 7,
     });
     expect(resolveChampionCombat(5, 5).attackerWins).toBe(false);
+  });
+
+  it('adds ally bonuses onto a champion total', () => {
+    expect(combatTotal(3, [4])).toBe(7);
+    expect(combatTotal(3, [4, 4])).toBe(11);
+    expect(combatTotal(null, [4])).toBe(4);
+    expect(combatTotal(7, [])).toBe(7);
   });
 });

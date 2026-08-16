@@ -151,6 +151,8 @@ describe('PlayTable', () => {
     game.seats[1].realms = [realm];
     expect(game.attack('a', 'atk', 'def')).toBeNull();
     expect(game.defend('b', 'defc')).toBeNull();
+    expect(game.battlefield?.defenderInstanceId).toBe('defc');
+    expect(game.resolveCombat('b')).toBeNull();
     expect(game.lastCombat).toMatchObject({
       attackerBonus: 7,
       defenderBonus: 3,
@@ -174,6 +176,7 @@ describe('PlayTable', () => {
     game.seats[1].realms = [realm];
     expect(game.attack('a', 'atk', 'def')).toBeNull();
     expect(game.defend('b', 'defc')).toBeNull();
+    expect(game.resolveCombat('a')).toBeNull();
     expect(game.lastCombat).toMatchObject({
       attackerBonus: 3,
       defenderBonus: 7,
@@ -184,6 +187,104 @@ describe('PlayTable', () => {
     expect(game.seats[0].pool).toHaveLength(0);
     expect(game.seats[0].discard.map((c) => c.instanceId)).toEqual(['atk']);
     expect(game.seats[1].pool).toHaveLength(1);
+  });
+
+  it('lets either fighter attach a hand ally and adds it to the combat total', () => {
+    const game = startedDuel();
+    const attacker = { instanceId: 'atk', cardId: '1st/43' };
+    const defender = { instanceId: 'defc', cardId: '1st/42' };
+    const realm = { instanceId: 'def', cardId: '1st/1' };
+    const warParty = { instanceId: 'ally1', cardId: '1st/54' };
+    const extraAlly = { instanceId: 'ally2', cardId: '1st/54' };
+    game.seats[0].pool = [attacker];
+    game.seats[0].hand = [warParty, extraAlly];
+    game.seats[1].pool = [defender];
+    game.seats[1].realms = [realm];
+    game.seats[1].hand = [{ instanceId: 'ally3', cardId: '1st/54' }];
+
+    expect(game.ally('a', 'ally1')).toBe('No attack to join');
+    expect(game.attack('a', 'atk', 'def')).toBeNull();
+    expect(game.ally('a', 'missing')).toBe('Ally must be in your hand');
+    expect(game.ally('b', 'ally3')).toBe('Defend with a champion first');
+    expect(game.ally('a', 'atk')).toBe('Ally must be in your hand');
+
+    const champInHand = { instanceId: 'notally', cardId: '1st/43' };
+    game.seats[0].hand.push(champInHand);
+    expect(game.ally('a', 'notally')).toBe('Only allies can join the battlefield');
+
+    expect(game.ally('a', 'ally1')).toBeNull();
+    const opened = game.viewFor('a', []).battlefield;
+    expect(opened?.attackerAllies.map((c) => c.instanceId)).toEqual(['ally1']);
+    expect(opened?.attackerTotal).toBe(7);
+    expect(opened?.defenderTotal).toBe(0);
+    expect(game.seats[0].hand.map((c) => c.instanceId)).toEqual(['ally2', 'notally']);
+
+    expect(game.defend('b', 'defc')).toBeNull();
+    expect(game.ally('b', 'ally3')).toBeNull();
+    expect(game.viewFor('a', []).battlefield).toMatchObject({
+      attackerTotal: 7,
+      defenderTotal: 11,
+    });
+    expect(game.resolveCombat('a')).toBeNull();
+    expect(game.lastCombat).toMatchObject({
+      attackerBonus: 7,
+      defenderBonus: 11,
+      razed: false,
+      attackerDiscarded: true,
+    });
+    expect(game.seats[0].discard.map((c) => c.instanceId)).toEqual(['ally1', 'atk']);
+    expect(game.seats[1].discard.map((c) => c.instanceId)).toEqual(['ally3']);
+    expect(game.seats[1].pool).toHaveLength(1);
+    expect(game.battlefield).toBeNull();
+  });
+
+  it('counts attacker allies when the defender declines', () => {
+    const game = startedDuel();
+    const attacker = { instanceId: 'atk', cardId: '1st/43' };
+    const realm = { instanceId: 'def', cardId: '1st/1' };
+    const warParty = { instanceId: 'ally1', cardId: '1st/54' };
+    game.seats[0].pool = [attacker];
+    game.seats[0].hand = [warParty];
+    game.seats[1].realms = [realm];
+    expect(game.attack('a', 'atk', 'def')).toBeNull();
+    expect(game.ally('a', 'ally1')).toBeNull();
+    expect(game.declineDefend('b')).toBeNull();
+    expect(game.lastCombat).toMatchObject({
+      attackerBonus: 7,
+      defenderBonus: 0,
+      razed: true,
+      attackerDiscarded: false,
+    });
+    expect(game.seats[0].discard.map((c) => c.instanceId)).toEqual(['ally1']);
+    expect(game.seats[0].pool).toHaveLength(1);
+  });
+
+  it('razes when allied attacker totals beat the defending champion', () => {
+    const game = startedDuel();
+    const attacker = { instanceId: 'atk', cardId: '1st/43' };
+    const defender = { instanceId: 'defc', cardId: '1st/42' };
+    const realm = { instanceId: 'def', cardId: '1st/1' };
+    game.seats[0].pool = [attacker];
+    game.seats[0].hand = [
+      { instanceId: 'ally1', cardId: '1st/54' },
+      { instanceId: 'ally2', cardId: '1st/54' },
+    ];
+    game.seats[1].pool = [defender];
+    game.seats[1].realms = [realm];
+    expect(game.attack('a', 'atk', 'def')).toBeNull();
+    expect(game.ally('a', 'ally1')).toBeNull();
+    expect(game.ally('a', 'ally2')).toBeNull();
+    expect(game.defend('b', 'defc')).toBeNull();
+    expect(game.resolveCombat('b')).toBeNull();
+    expect(game.lastCombat).toMatchObject({
+      attackerBonus: 11,
+      defenderBonus: 7,
+      razed: true,
+      attackerDiscarded: false,
+    });
+    expect(game.razed.has('def')).toBe(true);
+    expect(game.seats[0].discard.map((c) => c.instanceId)).toEqual(['ally1', 'ally2']);
+    expect(game.seats[0].pool).toHaveLength(1);
   });
 
   it('rejects an attack in the end phase', () => {
