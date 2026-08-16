@@ -129,7 +129,25 @@ card types.
   - Defended: compare champion bonuses. Attacker wins → realm razed, both
     champions stay in pool. Defender holds (tie or better) → attacker is
     discarded, realm unrazed.
-  No spoils, attachments, or formation slots yet.
+  Allies (`play:ally`) may attach from hand (typeId 1) onto a champion already
+  in the fight. Combat totals are champion bonus + ally bonuses. After a
+  champion defends, either fighter `play:resolve`s. Attached allies go to
+  discard when the fight ends. No spells, items, formation, holdings, or
+  spoils yet.
+
+## Step 8 — Battlefield allies
+
+While a battlefield is open, either seated player may play an **Ally**
+(`typeId` 1) from **hand** onto their champion in that fight
+(`play:ally`). The server looks up type and bonus from the card catalog.
+
+- Attacker may ally as soon as the attack opens.
+- Defender may ally only after `play:defend` commits a pool champion.
+- Combat total = champion bonus + sum of that side’s ally bonuses.
+- Same resolve rule: attacker must be strictly greater to raze; otherwise
+  the attacker is discarded.
+- Allies stay attached for this fight only, then go to their owner’s
+  discard when combat resolves (`play:resolve` or `play:decline-defend`).
 
 ## Tech stack
 
@@ -146,4 +164,5 @@ React Router · MiniSearch · TanStack Query · Fastify · Prisma · Supabase Au
 5. **Digital tabletop (shared board, private hands)** ✅
 6. **Rules engine first slice (turn, zones, realm attack)** ✅
 7. **Battlefield defense (champion vs champion)** ✅
-8. Allies, spells, items, formation A–F, holdings, spoils — later.
+8. **Battlefield allies (hand allies add to combat totals)** ✅
+9. Spells, items, formation A–F, holdings, spoils — later.

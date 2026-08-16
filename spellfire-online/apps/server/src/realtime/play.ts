@@ -15,7 +15,9 @@ import {
   STARTING_HAND_SIZE,
   type SeatView,
   canMoveToZone,
+  combatTotal,
   expandDeck,
+  isAllyType,
   isChampionType,
   resolveChampionCombat,
   resolveRealmAttack,
@@ -69,7 +71,7 @@ const PUBLIC_MOVE_ZONES = ['pool', 'realms', 'discard'] as const;
 
 /**
  * In-memory digital tabletop for one lobby table.
- * Enforces turn, zone-by-type, and battlefield realm attacks.
+ * Enforces turn, zone-by-type, battlefield realm attacks, and ally attach.
  */
 export class PlayTable {
   status: 'lobby' | 'playing' = 'lobby';
@@ -227,9 +229,9 @@ export class PlayTable {
     if (defErr) return defErr;
     const bf = this.battlefield;
     if (!bf) return 'No attack to defend';
+    if (bf.defenderInstanceId) return 'Already defending';
     const foe = this.seats[this.defendingSeat()];
-    const attackerSeat = this.seats[this.activeSeat];
-    if (!foe || !attackerSeat) return 'Not seated';
+    if (!foe) return 'Not seated';
 
     const defender = foe.pool.find((c) => c.instanceId === defenderInstanceId);
     if (!defender) return 'Defender must be in your pool';
@@ -237,6 +239,25 @@ export class PlayTable {
     if (!defenderFacts || !isChampionType(defenderFacts.typeId)) {
       return 'Defender must be a champion';
     }
+    bf.defenderInstanceId = defender.instanceId;
+    bf.defenderCardId = defender.cardId;
+    return null;
+  }
+
+  resolveCombat(userId: string): string | null {
+    const fightErr = this.requireFighter(userId);
+    if (fightErr) return fightErr;
+    const bf = this.battlefield;
+    if (!bf) return 'No attack to resolve';
+    if (!bf.defenderInstanceId) return 'Defend or decline first';
+    const foe = this.seats[this.defendingSeat()];
+    const attackerSeat = this.seats[this.activeSeat];
+    if (!foe || !attackerSeat) return 'Not seated';
+
+    const defender = foe.pool.find((c) => c.instanceId === bf.defenderInstanceId);
+    if (!defender) return 'Defender is no longer in the pool';
+    const defenderFacts = this.lookup(defender.cardId);
+    if (!defenderFacts) return 'Unknown card';
     const attacker = attackerSeat.pool.find((c) => c.instanceId === bf.attackerInstanceId);
     if (!attacker) return 'Attacker is no longer in the pool';
     const attackerFacts = this.lookup(attacker.cardId);
@@ -244,7 +265,11 @@ export class PlayTable {
     const realm = foe.realms.find((c) => c.instanceId === bf.targetInstanceId);
     if (!realm) return 'Target realm is gone';
 
-    const outcome = resolveChampionCombat(attackerFacts.bonus, defenderFacts.bonus);
+    const outcome = resolveChampionCombat(
+      this.sideTotal(attackerFacts.bonus, bf.attackerAllies),
+      this.sideTotal(defenderFacts.bonus, bf.defenderAllies),
+    );
+    this.discardAllies();
     if (outcome.attackerWins) {
       this.razed.add(realm.instanceId);
       this.lastCombat = {
@@ -279,6 +304,7 @@ export class PlayTable {
     if (defErr) return defErr;
     const bf = this.battlefield;
     if (!bf) return 'No attack to defend';
+    if (bf.defenderInstanceId) return 'Already defending';
     const foe = this.seats[this.defendingSeat()];
     const attackerSeat = this.seats[this.activeSeat];
     if (!foe || !attackerSeat) return 'Not seated';
@@ -291,7 +317,11 @@ export class PlayTable {
     const realmFacts = this.lookup(realm.cardId);
     if (!realmFacts) return 'Unknown card';
 
-    const outcome = resolveRealmAttack(attackerFacts.bonus, realmFacts.bonus);
+    const outcome = resolveRealmAttack(
+      this.sideTotal(attackerFacts.bonus, bf.attackerAllies),
+      realmFacts.bonus,
+    );
+    this.discardAllies();
     this.lastCombat = {
       attackerInstanceId: attacker.instanceId,
       targetInstanceId: realm.instanceId,
@@ -303,6 +333,33 @@ export class PlayTable {
     };
     if (outcome.razed) this.razed.add(realm.instanceId);
     this.battlefield = null;
+    return null;
+  }
+
+  ally(userId: string, instanceId: string): string | null {
+    if (this.status !== 'playing') return 'Game has not started';
+    const bf = this.battlefield;
+    if (!bf) return 'No attack to join';
+    const seatIndex = this.seats.findIndex((s) => s.occupant?.userId === userId);
+    if (seatIndex < 0) return 'Not seated';
+    const isAttacker = seatIndex === this.activeSeat;
+    const isDefender = seatIndex === this.defendingSeat();
+    if (!isAttacker && !isDefender) return 'Not in this fight';
+    if (isDefender && !bf.defenderInstanceId) return 'Defend with a champion first';
+
+    const seat = this.seats[seatIndex];
+    if (!seat) return 'Not seated';
+    const handIdx = seat.hand.findIndex((c) => c.instanceId === instanceId);
+    if (handIdx < 0) return 'Ally must be in your hand';
+    const card = seat.hand[handIdx];
+    if (!card) return 'Ally must be in your hand';
+    const facts = this.lookup(card.cardId);
+    if (!facts) return 'Unknown card';
+    if (!isAllyType(facts.typeId)) return 'Only allies can join the battlefield';
+
+    seat.hand.splice(handIdx, 1);
+    if (isAttacker) bf.attackerAllies.push(card);
+    else bf.defenderAllies.push(card);
     return null;
   }
 
@@ -335,7 +392,7 @@ export class PlayTable {
       ],
       spectators,
       lastCombat: this.lastCombat,
-      battlefield: this.battlefield,
+      battlefield: this.battlefieldView(),
     };
   }
 
@@ -354,6 +411,16 @@ export class PlayTable {
     const foe = this.seats[this.defendingSeat()];
     if (!foe?.occupant) return 'No opponent';
     if (foe.occupant.userId !== userId) return 'Not the defending player';
+    return null;
+  }
+
+  private requireFighter(userId: string): string | null {
+    if (this.status !== 'playing') return 'Game has not started';
+    if (!this.battlefield) return 'No attack to resolve';
+    const seatIndex = this.seats.findIndex((s) => s.occupant?.userId === userId);
+    if (seatIndex !== this.activeSeat && seatIndex !== this.defendingSeat()) {
+      return 'Not in this fight';
+    }
     return null;
   }
 
@@ -388,7 +455,51 @@ export class PlayTable {
       targetCardId: target.cardId,
       defenderInstanceId: null,
       defenderCardId: null,
+      attackerAllies: [],
+      defenderAllies: [],
+      attackerTotal: 0,
+      defenderTotal: 0,
     };
+  }
+
+  private battlefieldView(): Battlefield | null {
+    const bf = this.battlefield;
+    if (!bf) return null;
+    const attackerSeat = this.seats[this.activeSeat];
+    const foe = this.seats[this.defendingSeat()];
+    const attacker = attackerSeat?.pool.find((c) => c.instanceId === bf.attackerInstanceId);
+    const attackerBonus = attacker ? this.lookup(attacker.cardId)?.bonus : 0;
+    let defenderBonus: number | null | undefined = 0;
+    if (bf.defenderInstanceId) {
+      const defender = foe?.pool.find((c) => c.instanceId === bf.defenderInstanceId);
+      defenderBonus = defender ? this.lookup(defender.cardId)?.bonus : 0;
+    } else {
+      const realm = foe?.realms.find((c) => c.instanceId === bf.targetInstanceId);
+      defenderBonus = realm ? this.lookup(realm.cardId)?.bonus : 0;
+    }
+    return {
+      ...bf,
+      attackerTotal: this.sideTotal(attackerBonus, bf.attackerAllies),
+      defenderTotal: this.sideTotal(defenderBonus, bf.defenderInstanceId ? bf.defenderAllies : []),
+    };
+  }
+
+  private sideTotal(championBonus: number | null | undefined, allies: CardInstance[]): number {
+    return combatTotal(
+      championBonus,
+      allies.map((card) => this.lookup(card.cardId)?.bonus),
+    );
+  }
+
+  private discardAllies(): void {
+    const bf = this.battlefield;
+    if (!bf) return;
+    const attackerSeat = this.seats[this.activeSeat];
+    const foe = this.seats[this.defendingSeat()];
+    if (attackerSeat) attackerSeat.discard.push(...bf.attackerAllies);
+    if (foe) foe.discard.push(...bf.defenderAllies);
+    bf.attackerAllies = [];
+    bf.defenderAllies = [];
   }
 
   private requireActive(userId: string): string | null {

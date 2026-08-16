@@ -5,6 +5,7 @@ export const CHAMPION_TYPE_IDS = [5, 7, 10, 12, 14, 16, 20] as const;
 export type ChampionTypeId = (typeof CHAMPION_TYPE_IDS)[number];
 
 export const REALM_TYPE_ID = 13;
+export const ALLY_TYPE_ID = 1;
 
 /** Informal CrossFire phase radios: 0 start, 1–3 build, 4 combat, 5 end. */
 export const COMBAT_PHASE = 4;
@@ -14,6 +15,10 @@ export const PHASE_LABELS = ['Start', 'First', 'Second', 'Third', 'Combat', 'End
 
 export function isChampionType(typeId: number): boolean {
   return (CHAMPION_TYPE_IDS as readonly number[]).includes(typeId);
+}
+
+export function isAllyType(typeId: number): boolean {
+  return typeId === ALLY_TYPE_ID;
 }
 
 export function numericBonus(bonus: number | null | undefined): number {
@@ -53,4 +58,16 @@ export function resolveChampionCombat(
   const atk = numericBonus(attackerBonus);
   const def = numericBonus(defenderBonus);
   return { attackerWins: atk > def, attackerBonus: atk, defenderBonus: def };
+}
+
+/** Champion bonus plus attached ally bonuses for one side of a fight. */
+export function combatTotal(
+  championBonus: number | null | undefined,
+  allyBonuses: Array<number | null | undefined> = [],
+): number {
+  let total = numericBonus(championBonus);
+  for (const bonus of allyBonuses) {
+    total += numericBonus(bonus);
+  }
+  return total;
 }
