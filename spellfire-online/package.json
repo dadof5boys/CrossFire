@@ -1,0 +1,27 @@
+{
+  "name": "spellfire-online",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Web reimplementation of the CrossFire Spellfire client (pnpm workspace).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build:data": "pnpm --filter @spellfire/data-pipeline build:data",
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "web": "pnpm --filter @spellfire/web dev",
+    "web:build": "pnpm --filter @spellfire/web build",
+    "server": "pnpm --filter @spellfire/server start",
+    "server:dev": "pnpm --filter @spellfire/server dev"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["@biomejs/biome", "esbuild", "prisma", "@prisma/client", "@prisma/engines"]
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4"
+  }
+}

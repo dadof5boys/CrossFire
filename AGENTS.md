@@ -17,4 +17,13 @@ CrossFire is a legacy **Tcl/Tk desktop GUI application** (for the Spellfire card
 
 ### Offline vs. online functionality
 - All local features work fully offline: card database browsing (`DataBase/*.tcl`), the **DeckIt!** deck editor (saves `.cfd` files to `Decks/`), Card Warehouse (inventory), ComboMan, Swap Shop, Fan Set editor, Solitaire, printing/reports.
-- **Online real-time chat/play** connects to an external server (`cfserver.spellfire.net:10000`) that is **not part of this repo and cannot be run locally** — treat it as optional/unreachable when testing.
+- **Online real-time chat/play** (legacy Tcl client) connects to an external server (`cfserver.spellfire.net:10000`) that is **not part of this repo**. A local SPINS checkout may be used instead. The web reimplementation does **not** speak that Tcl protocol.
+
+## Spellfire Online (`spellfire-online/`)
+
+Web reimplementation of CrossFire. Canonical commands and stack notes live in `spellfire-online/README.md`.
+
+- **Dev stack**: pnpm workspace. Vite web app on **5173**, Fastify API + Socket.IO on **8787**, local Supabase (`supabase start` from `spellfire-online/`) for Auth + Postgres.
+- **Chat / play**: Socket.IO on the Fastify process (ephemeral in-memory state). Vite must proxy `/socket.io` with `ws: true`. `/play/:tableId` is the digital tabletop. The server enforces turn order, zone-by-`typeId` (realms = 13, pool = champions, allies = 1), and battlefield combat: `play:attack` opens a pending attack; the defender `play:defend`s with a pool champion or `play:decline-defend`. Either fighter may `play:ally` a hand ally (typeId 1) onto their champion (defender only after a champion is committed). After a champion defends, either fighter `play:resolve`s. Combat total = champion bonus + ally bonuses; attached allies go to discard on resolve. It looks up cards from `packages/data-pipeline/data/cards.json` — do not trust client-sent type/bonus. Draw/move/pass/attack are blocked until the attack resolves; `play:ally` is legal during an open battlefield.
+- The play page must `joinTable` on **this browser socket** even if the same user is already listed as an occupant (another tab or a helper script). Occupancy is per-socket; skipping join leaves the UI outside the table room so `play:state` never arrives.
+- Restart the Fastify process after server-side Socket.IO changes; the old process will not pick them up. Auth tokens come from the signed-in Supabase session (`auth.token` on the handshake).

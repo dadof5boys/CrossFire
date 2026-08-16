@@ -1,0 +1,26 @@
+// Prisma manages our application tables in the `public` schema of the Supabase
+// Postgres database. Supabase owns the `auth` schema (auth.users); we store the
+// authenticated user's UUID on Deck.userId and enforce ownership in the API
+// rather than via a cross-schema foreign key.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Deck {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  name      String
+  /// Array of { cardId: string, qty: number }, validated by Zod at the API boundary.
+  cards     Json     @default("[]")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("decks")
+}
